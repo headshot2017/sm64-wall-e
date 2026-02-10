@@ -2,7 +2,7 @@
 
 Mod for WALL-E (PC) that replaces the player with Mario from Super Mario 64 by using the [libsm64](https://github.com/libsm64/libsm64) library
 
-Work in progress... at this time, the game only loads the ROM. Mario does not appear in-game yet.
+Work in progress... at this time, the mod only loads the ROM. Mario does not appear in-game yet.
 
 ## Requirements to play
 
