@@ -1,0 +1,363 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<CodeBlocks_project_file>
+	<FileVersion major="1" minor="6" />
+	<Project>
+		<Option title="libsm64-wall-e" />
+		<Option platforms="Windows;" />
+		<Option pch_mode="2" />
+		<Option compiler="gnu_gcc_compiler_msys2" />
+		<Build>
+			<Target title="Debug">
+				<Option output="bin/Debug/libsm64-wall-e.asi" prefix_auto="1" extension_auto="0" />
+				<Option object_output="obj/Debug/" />
+				<Option type="3" />
+				<Option compiler="gnu_gcc_compiler_msys2" />
+				<Option parameters="-W" />
+				<Option host_application="C:/Program Files (x86)/Steam/steamapps/common/WALL E/WALL-E/WALL-E.exe" />
+				<Option run_host_application_in_terminal="0" />
+				<Option createDefFile="1" />
+				<Option createStaticLib="1" />
+				<Compiler>
+					<Add option="-Wall" />
+					<Add option="-g" />
+				</Compiler>
+				<Linker>
+					<Add library="user32" />
+				</Linker>
+			</Target>
+			<Target title="Release">
+				<Option output="bin/Release/libsm64-wall-e.asi" prefix_auto="1" extension_auto="0" />
+				<Option object_output="obj/Release/" />
+				<Option type="3" />
+				<Option compiler="gnu_gcc_compiler_msys2" />
+				<Option parameters="-W" />
+				<Option host_application="C:/Program Files (x86)/Steam/steamapps/common/WALL E/WALL-E/WALL-E.exe" />
+				<Option run_host_application_in_terminal="0" />
+				<Option createDefFile="1" />
+				<Option createStaticLib="1" />
+				<Compiler>
+					<Add option="-O2" />
+					<Add option="-Wall" />
+				</Compiler>
+				<Linker>
+					<Add option="-s" />
+					<Add library="user32" />
+				</Linker>
+			</Target>
+		</Build>
+		<Compiler>
+			<Add option="-std=c++23" />
+			<Add option="-DBUILD_DLL" />
+			<Add option="-DSM64_LIB_EXPORT" />
+			<Add option="-DVERSION_US" />
+			<Add option="-DNO_SEGMENTED_MEMORY" />
+			<Add option="-DGBI_FLOATS" />
+			<Add directory="./third_party" />
+			<Add directory="./third_party/libsm64/decomp/include" />
+			<Add directory="./third_party/safetyhook" />
+		</Compiler>
+		<Linker>
+			<Add library="SDL2" />
+			<Add library="ole32" />
+			<Add directory="./lib" />
+		</Linker>
+		<ExtraCommands>
+			<Add after='cmd /c if not exist &quot;C:\Program Files (x86)\Steam\steamapps\common\WALL E\WALL-E\scripts&quot; mkdir &quot;C:\Program Files (x86)\Steam\steamapps\common\WALL E\WALL-E\scripts&quot;' />
+			<Add after='cmd /c copy &quot;$(PROJECT_DIR)$(TARGET_OUTPUT_FILE)&quot; &quot;C:\Program Files (x86)\Steam\steamapps\common\WALL E\WALL-E\scripts&quot;' />
+			<Mode after="always" />
+		</ExtraCommands>
+		<Unit filename="src/audio.cpp" />
+		<Unit filename="src/audio.h" />
+		<Unit filename="src/audioApis/audio_sdl2.cpp" />
+		<Unit filename="src/audioApis/audio_sdl2.h" />
+		<Unit filename="src/audioApis/audio_wasapi.cpp" />
+		<Unit filename="src/audioApis/audio_wasapi.h" />
+		<Unit filename="src/config.cpp" />
+		<Unit filename="src/config.h" />
+		<Unit filename="src/main.cpp" />
+		<Unit filename="src/mod.cpp" />
+		<Unit filename="src/mod.h" />
+		<Unit filename="third_party/TinySHA1.hpp" />
+		<Unit filename="third_party/libsm64/debug_print.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/debug_print.h" />
+		<Unit filename="third_party/libsm64/decomp/audio/data.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/audio/data.h" />
+		<Unit filename="third_party/libsm64/decomp/audio/effects.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/audio/effects.h" />
+		<Unit filename="third_party/libsm64/decomp/audio/external.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/audio/external.h" />
+		<Unit filename="third_party/libsm64/decomp/audio/globals_start.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/audio/heap.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/audio/heap.h" />
+		<Unit filename="third_party/libsm64/decomp/audio/internal.h" />
+		<Unit filename="third_party/libsm64/decomp/audio/load.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/audio/load.h" />
+		<Unit filename="third_party/libsm64/decomp/audio/load_dat.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/audio/load_dat.h" />
+		<Unit filename="third_party/libsm64/decomp/audio/load_sh.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/audio/playback.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/audio/playback.h" />
+		<Unit filename="third_party/libsm64/decomp/audio/port_eu.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/audio/port_sh.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/audio/seqplayer.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/audio/seqplayer.h" />
+		<Unit filename="third_party/libsm64/decomp/audio/shindou_debug_prints.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/audio/synthesis.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/audio/synthesis.h" />
+		<Unit filename="third_party/libsm64/decomp/audio/synthesis_sh.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/engine/geo_layout.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/engine/geo_layout.h" />
+		<Unit filename="third_party/libsm64/decomp/engine/graph_node.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/engine/graph_node.h" />
+		<Unit filename="third_party/libsm64/decomp/engine/graph_node_manager.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/engine/guMtxF2L.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/engine/guMtxF2L.h" />
+		<Unit filename="third_party/libsm64/decomp/engine/math_util.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/engine/math_util.h" />
+		<Unit filename="third_party/libsm64/decomp/engine/surface_collision.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/engine/surface_collision.h" />
+		<Unit filename="third_party/libsm64/decomp/game/area.h" />
+		<Unit filename="third_party/libsm64/decomp/game/behavior_actions.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/game/behavior_actions.h" />
+		<Unit filename="third_party/libsm64/decomp/game/camera.h" />
+		<Unit filename="third_party/libsm64/decomp/game/interaction.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/game/interaction.h" />
+		<Unit filename="third_party/libsm64/decomp/game/level_update.h" />
+		<Unit filename="third_party/libsm64/decomp/game/mario.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/game/mario.h" />
+		<Unit filename="third_party/libsm64/decomp/game/mario_actions_airborne.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/game/mario_actions_airborne.h" />
+		<Unit filename="third_party/libsm64/decomp/game/mario_actions_automatic.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/game/mario_actions_automatic.h" />
+		<Unit filename="third_party/libsm64/decomp/game/mario_actions_cutscene.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/game/mario_actions_cutscene.h" />
+		<Unit filename="third_party/libsm64/decomp/game/mario_actions_moving.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/game/mario_actions_moving.h" />
+		<Unit filename="third_party/libsm64/decomp/game/mario_actions_object.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/game/mario_actions_object.h" />
+		<Unit filename="third_party/libsm64/decomp/game/mario_actions_stationary.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/game/mario_actions_stationary.h" />
+		<Unit filename="third_party/libsm64/decomp/game/mario_actions_submerged.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/game/mario_actions_submerged.h" />
+		<Unit filename="third_party/libsm64/decomp/game/mario_misc.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/game/mario_misc.h" />
+		<Unit filename="third_party/libsm64/decomp/game/mario_step.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/game/mario_step.h" />
+		<Unit filename="third_party/libsm64/decomp/game/object_stuff.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/game/object_stuff.h" />
+		<Unit filename="third_party/libsm64/decomp/game/platform_displacement.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/game/platform_displacement.h" />
+		<Unit filename="third_party/libsm64/decomp/game/rendering_graph_node.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/game/rendering_graph_node.h" />
+		<Unit filename="third_party/libsm64/decomp/game/save_file.h" />
+		<Unit filename="third_party/libsm64/decomp/game/sound_init.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/game/sound_init.h" />
+		<Unit filename="third_party/libsm64/decomp/global_state.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/global_state.h" />
+		<Unit filename="third_party/libsm64/decomp/include/PR/abi.h" />
+		<Unit filename="third_party/libsm64/decomp/include/PR/gbi.h" />
+		<Unit filename="third_party/libsm64/decomp/include/PR/libaudio.h" />
+		<Unit filename="third_party/libsm64/decomp/include/PR/libultra.h" />
+		<Unit filename="third_party/libsm64/decomp/include/PR/os.h" />
+		<Unit filename="third_party/libsm64/decomp/include/PR/os_ai.h" />
+		<Unit filename="third_party/libsm64/decomp/include/PR/os_cache.h" />
+		<Unit filename="third_party/libsm64/decomp/include/PR/os_cont.h" />
+		<Unit filename="third_party/libsm64/decomp/include/PR/os_eeprom.h" />
+		<Unit filename="third_party/libsm64/decomp/include/PR/os_exception.h" />
+		<Unit filename="third_party/libsm64/decomp/include/PR/os_internal.h" />
+		<Unit filename="third_party/libsm64/decomp/include/PR/os_libc.h" />
+		<Unit filename="third_party/libsm64/decomp/include/PR/os_message.h" />
+		<Unit filename="third_party/libsm64/decomp/include/PR/os_misc.h" />
+		<Unit filename="third_party/libsm64/decomp/include/PR/os_pi.h" />
+		<Unit filename="third_party/libsm64/decomp/include/PR/os_rdp.h" />
+		<Unit filename="third_party/libsm64/decomp/include/PR/os_thread.h" />
+		<Unit filename="third_party/libsm64/decomp/include/PR/os_time.h" />
+		<Unit filename="third_party/libsm64/decomp/include/PR/os_tlb.h" />
+		<Unit filename="third_party/libsm64/decomp/include/PR/os_vi.h" />
+		<Unit filename="third_party/libsm64/decomp/include/PR/sptask.h" />
+		<Unit filename="third_party/libsm64/decomp/include/PR/ucode.h" />
+		<Unit filename="third_party/libsm64/decomp/include/PR/ultratypes.h" />
+		<Unit filename="third_party/libsm64/decomp/include/audio_defines.h" />
+		<Unit filename="third_party/libsm64/decomp/include/command_macros_base.h" />
+		<Unit filename="third_party/libsm64/decomp/include/geo_commands.h" />
+		<Unit filename="third_party/libsm64/decomp/include/level_misc_macros.h" />
+		<Unit filename="third_party/libsm64/decomp/include/macros.h" />
+		<Unit filename="third_party/libsm64/decomp/include/mario_animation_ids.h" />
+		<Unit filename="third_party/libsm64/decomp/include/mario_geo_switch_case_ids.h" />
+		<Unit filename="third_party/libsm64/decomp/include/object_fields.h" />
+		<Unit filename="third_party/libsm64/decomp/include/platform_info.h" />
+		<Unit filename="third_party/libsm64/decomp/include/seq_ids.h" />
+		<Unit filename="third_party/libsm64/decomp/include/sm64.h" />
+		<Unit filename="third_party/libsm64/decomp/include/special_preset_names.h" />
+		<Unit filename="third_party/libsm64/decomp/include/surface_terrains.h" />
+		<Unit filename="third_party/libsm64/decomp/include/types.h" />
+		<Unit filename="third_party/libsm64/decomp/include/ultra64.h" />
+		<Unit filename="third_party/libsm64/decomp/mario/geo.inc.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/mario/geo.inc.h" />
+		<Unit filename="third_party/libsm64/decomp/mario/model.inc.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/mario/model.inc.h" />
+		<Unit filename="third_party/libsm64/decomp/memory.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/memory.h" />
+		<Unit filename="third_party/libsm64/decomp/pc/alBnkfNew.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/pc/libaudio_internal.h" />
+		<Unit filename="third_party/libsm64/decomp/pc/libultra_internal.h" />
+		<Unit filename="third_party/libsm64/decomp/pc/mixer.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/pc/mixer.h" />
+		<Unit filename="third_party/libsm64/decomp/pc/ultra_reimplementation.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/shim.h" />
+		<Unit filename="third_party/libsm64/decomp/tools/convTypes.h" />
+		<Unit filename="third_party/libsm64/decomp/tools/convUtils.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/tools/convUtils.h" />
+		<Unit filename="third_party/libsm64/decomp/tools/libmio0.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/tools/libmio0.h" />
+		<Unit filename="third_party/libsm64/decomp/tools/n64graphics.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/tools/n64graphics.h" />
+		<Unit filename="third_party/libsm64/decomp/tools/stb/stb_image.h" />
+		<Unit filename="third_party/libsm64/decomp/tools/stb/stb_image_write.h" />
+		<Unit filename="third_party/libsm64/decomp/tools/utils.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/decomp/tools/utils.h" />
+		<Unit filename="third_party/libsm64/fake_interaction.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/fake_interaction.h" />
+		<Unit filename="third_party/libsm64/gfx_adapter.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/gfx_adapter.h" />
+		<Unit filename="third_party/libsm64/gfx_adapter_commands.h" />
+		<Unit filename="third_party/libsm64/gfx_macros.h" />
+		<Unit filename="third_party/libsm64/libsm64.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/libsm64.h" />
+		<Unit filename="third_party/libsm64/load_anim_data.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/load_anim_data.h" />
+		<Unit filename="third_party/libsm64/load_audio_data.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/load_audio_data.h" />
+		<Unit filename="third_party/libsm64/load_surfaces.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/load_surfaces.h" />
+		<Unit filename="third_party/libsm64/load_tex_data.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/load_tex_data.h" />
+		<Unit filename="third_party/libsm64/obj_pool.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/obj_pool.h" />
+		<Unit filename="third_party/libsm64/play_sound.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/libsm64/play_sound.h" />
+		<Unit filename="third_party/safetyhook/Zydis.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="third_party/safetyhook/Zydis.h" />
+		<Unit filename="third_party/safetyhook/safetyhook.cpp" />
+		<Unit filename="third_party/safetyhook/safetyhook.hpp" />
+		<Extensions />
+	</Project>
+</CodeBlocks_project_file>

@@ -1,0 +1,7 @@
+bin/
+obj/
+*.depend
+*.layout
+*.dll
+*.asi
+*.z64
