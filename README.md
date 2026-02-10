@@ -1,4 +1,4 @@
-# libsm64-wall-e
+# sm64-wall-e
 
 Mod for WALL-E (PC) that replaces the player with Mario from Super Mario 64 by using the [libsm64](https://github.com/libsm64/libsm64) library
 
