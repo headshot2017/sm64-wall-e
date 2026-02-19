@@ -59,6 +59,13 @@
 		<Linker>
 			<Add library="SDL2" />
 			<Add library="ole32" />
+			<Add library="setupapi" />
+			<Add library="gdi32" />
+			<Add library="imm32" />
+			<Add library="oleaut32" />
+			<Add library="version" />
+			<Add library="winmm" />
+			<Add library="d3dx9" />
 			<Add directory="./lib" />
 		</Linker>
 		<ExtraCommands>
@@ -75,6 +82,7 @@
 		<Unit filename="src/config.cpp" />
 		<Unit filename="src/config.h" />
 		<Unit filename="src/main.cpp" />
+		<Unit filename="src/marioEffect.h" />
 		<Unit filename="src/mod.cpp" />
 		<Unit filename="src/mod.h" />
 		<Unit filename="third_party/TinySHA1.hpp" />
