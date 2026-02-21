@@ -17,10 +17,26 @@ sampler TextureSampler = sampler_state
 };
 
 
-struct VSOut
+struct VSIn
 {
-	float4 pos : POSITION; // Position after vertex shader has executed
-	float2 tex : TEXCOORD; // Texture coordinates after vertex shader has executed
+	float3 pos : POSITION;
+	float3 normal : NORMAL;
+	float4 color : COLOR;
+	float2 tex : TEXCOORD;
+};
+
+struct VSOut_Textured
+{
+	float4 pos : POSITION;
+	float3 normal : TEXCOORD1;
+	float2 tex : TEXCOORD0;
+};
+
+struct VSOut_Untextured
+{
+	float4 pos : POSITION;
+	float3 normal : TEXCOORD1;
+	float4 color : COLOR;
 };
 
 struct PSOut
@@ -29,39 +45,84 @@ struct PSOut
 };
 
 
-VSOut TheVertexShader(float3 pos : POSITION, float2 texCoords : TEXCOORD)
+VSOut_Textured TexturedVertexShader(VSIn vIn)
 {
-	VSOut vOut;
+	VSOut_Textured vOut;
 
 	// Create the worldViewProjection matrix
 	float4x4 worldViewProjMat = mul(gWorldMat, mul(gViewMat, gProjMat));
 
 	// Put vertex position in screen space
-	vOut.pos = mul(float4(pos, 1), worldViewProjMat);
-	vOut.tex = texCoords; // Just pass the texture coordinates as they are
+	vOut.pos = mul(float4(vIn.pos, 1), worldViewProjMat);
+	vOut.normal = vIn.normal;
+	vOut.tex = vIn.tex;
 	return vOut;
 }
 
-PSOut ThePixelShader(float2 uv : TEXCOORD)
+PSOut TexturedPixelShader(float2 uv : TEXCOORD)
 {
 	PSOut pOut;
 
 	pOut.color = tex2D(TextureSampler, uv);
-	return pOut; // Return the pixel shader output
+	return pOut;
 }
 
 
-technique SingleTexture
+VSOut_Untextured UntexturedVertexShader(VSIn vIn)
 {
+	VSOut_Untextured vOut;
+
+	// Create the worldViewProjection matrix
+	float4x4 worldViewProjMat = mul(gWorldMat, mul(gViewMat, gProjMat));
+
+	// Put vertex position in screen space
+	vOut.pos = mul(float4(vIn.pos, 1), worldViewProjMat);
+	vOut.normal = vIn.normal;
+	vOut.color = vIn.color;
+	return vOut;
+}
+
+PSOut UntexturedPixelShader(float4 color : COLOR)
+{
+	PSOut pOut;
+
+	pOut.color = color;
+	return pOut;
+}
+
+
+technique MarioTechnique
+{
+	// untextured
 	pass First
 	{
-		//Lighting = FALSE; // Turn off lights
+		Lighting = TRUE; // Turn off lights
 		ZEnable = TRUE; // Turn on the Z-buffer
+		ZWriteEnable = TRUE; // Turn on the Z-buffer
+		AlphaBlendEnable = TRUE; // Turn on alpha blending
+		SrcBlend = SRCALPHA; // Set SrcBlend flag for standard alpha blending
+		DestBlend = INVSRCALPHA; // Set DestBlend flag for standard alpha blending
+		CullMode = CW;
+
+		VertexShader = compile vs_2_0 UntexturedVertexShader();
+		PixelShader = compile ps_2_0 UntexturedPixelShader();
+	}
+
+	// textured
+	pass Second
+	{
+		Lighting = TRUE; // Turn off lights
+		ZEnable = TRUE; // Turn on the Z-buffer
+		ZWriteEnable = TRUE; // Turn on the Z-buffer
+		AlphaBlendEnable = TRUE; // Turn on alpha blending
+		SrcBlend = SRCALPHA; // Set SrcBlend flag for standard alpha blending
+		DestBlend = INVSRCALPHA; // Set DestBlend flag for standard alpha blending
+		CullMode = CW;
 
 		Sampler[0] = (TextureSampler); // Set sampler
 
-		VertexShader = compile vs_2_0 TheVertexShader();
-		PixelShader = compile ps_2_0 ThePixelShader();
+		VertexShader = compile vs_2_0 TexturedVertexShader();
+		PixelShader = compile ps_2_0 TexturedPixelShader();
 	}
 })=====";
 

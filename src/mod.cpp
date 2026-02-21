@@ -19,14 +19,13 @@ extern "C" {
 #include "config.h"
 #include "marioEffect.h"
 
-//#define D3DFVF_WALLEVERTEX (D3DFVF_XYZ | D3DFVF_NORMAL | D3DFVF_DIFFUSE | D3DFVF_TEX1)
-#define D3DFVF_WALLEVERTEX (D3DFVF_XYZ | D3DFVF_TEX1)
+#define D3DFVF_WALLEVERTEX (D3DFVF_XYZ | D3DFVF_NORMAL | D3DFVF_DIFFUSE | D3DFVF_TEX1)
 
 struct WALLEVERTEX
 {
 	float  x,  y,  z; // position
-	//float nx, ny, nz; // normal
-	//D3DCOLOR color;
+	float nx, ny, nz; // normal
+	D3DCOLOR color;
 	float  u,  v;     // texture
 };
 
@@ -36,7 +35,6 @@ void Message(const char* sometext)
 }
 
 static uint8_t* marioTexture;
-static uint16_t marioIndices[SM64_GEO_MAX_TRIANGLES * 3];
 static float marioTimer = 0;
 static int marioId = -1;
 static SM64MarioState marioState = {0};
@@ -44,11 +42,11 @@ static SM64MarioInputs marioInput = {0};
 static SM64MarioGeometryBuffers marioGeometry = {0};
 LPDIRECT3DDEVICE9 d3d9Device = 0;
 LPDIRECT3DTEXTURE9 marioTextureD3D9 = 0;
-LPDIRECT3DVERTEXBUFFER9 marioVertexBuffer = 0;
-LPD3DXEFFECT marioEffect = 0;
 WALLEVERTEX* marioVerticesP = 0;
+LPD3DXEFFECT marioEffect = 0;
 float projMatrix[16] = {0};
 float viewMatrix[16] = {0};
+static void RenderMario();
 
 
 auto RegisterCmd = 0x4763b0;
@@ -67,6 +65,7 @@ auto D3D_RendererZ_EndRender = 0x5b5140;
 auto RendererZ_DrawString = 0x5cb8e0;
 auto D3D_RendererZ_PushProjMatrix = 0x5aed70;
 auto D3D_RendererZ_PushViewMatrix = 0x5aee00;
+auto ClearZBuffer = 0x58ffb0;
 SafetyHookInline RegisterCmdOrig;
 SafetyHookInline RunCmdOrig;
 SafetyHookInline ScriptManagerG_Init_Orig;
@@ -83,10 +82,11 @@ SafetyHookInline D3D_RendererZ_EndRender_Orig;
 SafetyHookInline RendererZ_DrawString_Orig;
 SafetyHookInline D3D_RendererZ_PushProjMatrix_Orig;
 SafetyHookInline D3D_RendererZ_PushViewMatrix_Orig;
-SafetyHookInline D3D_EndScene_Orig;
+SafetyHookInline ClearZBuffer_Orig;
+SafetyHookInline D3D_Clear_Orig;
 safetyhook::MidHook D3D_RendererZ_PushProjMatrix_MidOrig;
 safetyhook::MidHook D3D_RendererZ_PushViewMatrix_MidOrig;
-SAFETYHOOK_STDCALL HRESULT D3D_EndScene_Hook(void* pThis);
+SAFETYHOOK_STDCALL HRESULT D3D_Clear_Hook(LPDIRECT3DDEVICE9, DWORD, const D3DRECT*, DWORD, D3DCOLOR, float, DWORD);
 
 
 SAFETYHOOK_THISCALL void RegisterCmdHook(void* pThis, const char* cmd, void* param_3)
@@ -139,6 +139,8 @@ SAFETYHOOK_THISCALL void GameZ_Update_Hook(void* pThis, float dt)
 	//printf("Game_Z::Update(): %x, dt=%f\n", pThis, dt);
 	GameZ_Update_Orig.thiscall<void>(pThis, dt);
 
+	if (marioId < 0) return;
+
 	void* pMainPlayer = ScriptManagerG_GetMainPlayer_Orig.thiscall<void*>(ScriptManagerG, 0);
 	if (!pMainPlayer)
 		return;
@@ -150,8 +152,6 @@ SAFETYHOOK_THISCALL void GameZ_Update_Hook(void* pThis, float dt)
 	float x = *(float*)(pHandle + 0);
 	float y = *(float*)(pHandle + 4);
 	float z = *(float*)(pHandle + 8);
-
-	if (marioId < 0) return;
 
 	marioTimer += dt;
 	while (marioTimer > 1.f/30.f)
@@ -256,9 +256,11 @@ SAFETYHOOK_THISCALL uint32_t D3D_RendererZ_Init_Hook(int* pThis, int width, int 
 	d3d9Device = (LPDIRECT3DDEVICE9)(pThis[0xbac]);
 	printf("IDirect3DDevice9: %x\n", d3d9Device);
 
+	// https://www.unknowncheats.me/forum/direct3d/66594-d3d9-vtables.html
 	auto vmt = *(uintptr_t**)(d3d9Device);
-	auto D3D_EndScene = vmt[0xA8 / sizeof(uintptr_t)];
-	D3D_EndScene_Orig = safetyhook::create_inline((void*)D3D_EndScene, (void*)&D3D_EndScene_Hook);
+	auto D3D_Clear = vmt[43];
+	D3D_Clear_Orig = safetyhook::create_inline((void*)D3D_Clear, (void*)&D3D_Clear_Hook);
+	printf("IDirect3DDevice9::Clear(): %x\n", D3D_Clear);
 
 	if (SUCCEEDED(d3d9Device->CreateTexture(SM64_TEXTURE_WIDTH, SM64_TEXTURE_HEIGHT, 0, 0, D3DFMT_A8B8G8R8, D3DPOOL_MANAGED, &marioTextureD3D9, 0)))
 	{
@@ -270,9 +272,6 @@ SAFETYHOOK_THISCALL uint32_t D3D_RendererZ_Init_Hook(int* pThis, int width, int 
 	else
 		printf("Failed to create SM64 texture on D3D9\n");
 
-	//d3d9Device->SetFVF(D3DFVF_WALLEVERTEX);
-	//if (FAILED(d3d9Device->CreateVertexBuffer(sizeof(WALLEVERTEX) * SM64_GEO_MAX_TRIANGLES * 3, D3DUSAGE_WRITEONLY, D3DFVF_WALLEVERTEX, D3DPOOL_DEFAULT, &marioVertexBuffer, 0)))
-		//printf("Failed to create vertex buffer\n");
 	marioVerticesP = new WALLEVERTEX[SM64_GEO_MAX_TRIANGLES * 3];
 
 	ID3DXBuffer *errorBuffer = 0;
@@ -370,6 +369,14 @@ SAFETYHOOK_THISCALL void D3D_RendererZ_PushViewMatrix_Hook(void* pThis, float* m
 	D3D_RendererZ_PushViewMatrix_Orig.thiscall<void>(pThis, mat4x4);
 }
 
+int callCount = 0;
+SAFETYHOOK_THISCALL void ClearZBuffer_Hook(void* pThis, void* param_2, int param_3)
+{
+	callCount++;
+	ClearZBuffer_Orig.thiscall<void>(pThis, param_2, param_3);
+	if (callCount == 1) RenderMario();
+}
+
 
 SAFETYHOOK_NOINLINE void D3D_RendererZ_PushProjMatrix_MidHook(SafetyHookContext& ctx)
 {
@@ -386,92 +393,63 @@ SAFETYHOOK_NOINLINE void D3D_RendererZ_PushViewMatrix_MidHook(SafetyHookContext&
 }
 
 
-SAFETYHOOK_STDCALL HRESULT D3D_EndScene_Hook(void* pThis)
+SAFETYHOOK_STDCALL HRESULT D3D_Clear_Hook(LPDIRECT3DDEVICE9 pThis, DWORD Count, const D3DRECT* pRects, DWORD Flags, D3DCOLOR Color, float Z, DWORD Stencil)
 {
-	if (marioId >= 0)
+	if (Flags & D3DCLEAR_TARGET) callCount = 0;
+	return D3D_Clear_Orig.stdcall<HRESULT>(pThis, Count, pRects, Flags, Color, Z, Stencil);
+}
+
+
+static void RenderMario()
+{
+	if (marioId < 0) return;
+
+	WALLEVERTEX* targetVertices = marioVerticesP;
+	for (uint32_t i=0; i<marioGeometry.numTrianglesUsed*3; i++)
 	{
-		WALLEVERTEX* targetVertices = marioVerticesP;
-		//marioVertexBuffer->Lock(0, 0, (void**)&targetVertices, 0);
-		for (uint32_t i=0; i<marioGeometry.numTrianglesUsed*3; i++)
-		{
-			targetVertices[i].x = marioGeometry.position[i*3+0] / MARIO_SCALE;
-			targetVertices[i].y = marioGeometry.position[i*3+1] / MARIO_SCALE;
-			targetVertices[i].z = marioGeometry.position[i*3+2] / MARIO_SCALE;
-			//targetVertices[i].color = D3DCOLOR_ARGB(255, (UINT)(marioGeometry.color[i*3+0]*255), (UINT)(marioGeometry.color[i*3+1]*255), (UINT)(marioGeometry.color[i*3+2]*255));
-			targetVertices[i].u = marioGeometry.uv[i*2+0];
-			targetVertices[i].v = marioGeometry.uv[i*2+1];
-		}
-		//marioVertexBuffer->Unlock();
-
-		/*
-		d3d9Device->SetTexture(0, marioTextureD3D9);
-		d3d9Device->SetVertexShader(0);
-		d3d9Device->SetPixelShader(0);
-		//d3d9Device->SetRenderState(D3DRS_LIGHTING, FALSE);
-		d3d9Device->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
-		d3d9Device->SetRenderState(D3DRS_SRCBLEND, D3DBLEND_SRCALPHA);
-		d3d9Device->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA);
-		d3d9Device->SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_MODULATE);
-		d3d9Device->SetTransform(D3DTS_PROJECTION, (D3DMATRIX*)projMatrix);
-		d3d9Device->SetTransform(D3DTS_VIEW, (D3DMATRIX*)viewMatrix);
-		//d3d9Device->SetStreamSource(0, marioVertexBuffer, 0, sizeof(WALLEVERTEX));
-		d3d9Device->SetStreamSource(0, 0, 0, 0);
-		d3d9Device->DrawPrimitiveUP(D3DPT_TRIANGLELIST, marioGeometry.numTrianglesUsed, marioVerticesP, sizeof(WALLEVERTEX));
-		*/
-
-		D3DXMATRIX projX(projMatrix), projXX(projMatrix);
-		D3DXMATRIX viewX(viewMatrix), viewXX(viewMatrix);
-		D3DXMATRIX worldX(1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1);
-		/*
-		static int choiceFrame = 0;
-		int choice = choiceFrame / 60;
-		if (choice > 16) choiceFrame = choice = 0;
-		int choiceX = choice % 4;
-		int choiceY = choice / 4;
-		if (choiceX == 1 || choiceX == 3) D3DXMatrixTranspose(&projX, &projXX);
-		if (choiceX == 2 || choiceX == 3) D3DXMatrixInverse(&projX, 0, &projXX);
-		if (choiceY == 1 || choiceY == 3) D3DXMatrixTranspose(&viewX, &viewXX);
-		if (choiceY == 2 || choiceY == 3) D3DXMatrixInverse(&viewX, 0, &viewXX);
-		choiceFrame++;
-		printf("choice %d\n", choice);
-		*/
-		D3DXMatrixInverse(&viewX, 0, &viewXX);
-
-		marioEffect->SetMatrix("gProjMat", &projX);
-		marioEffect->SetMatrix("gViewMat", &viewX);
-		marioEffect->SetMatrix("gWorldMat", &worldX);
-		marioEffect->SetTexture("gTexture", marioTextureD3D9);
-		marioEffect->SetTechnique("SingleTexture");
-
-		unsigned int numPasses = 0;
-		marioEffect->Begin(&numPasses, 0);
-
-		for(unsigned int i = 0; i < numPasses; ++i)
-		{
-			// Begin the 'ith' pass on the selected technique
-			marioEffect->BeginPass(i);
-
-			// Set the flexible vertex format
-			d3d9Device->SetFVF(D3DFVF_WALLEVERTEX);
-
-			// Render the triangles
-			HRESULT result = d3d9Device->DrawPrimitiveUP(D3DPT_TRIANGLELIST, marioGeometry.numTrianglesUsed, marioVerticesP, sizeof(WALLEVERTEX));
-
-			// End the 'ith' pass
-			marioEffect->EndPass();
-
-			if (result != D3D_OK)
-			{
-				printf("error rendering pass %d out of %d: %d\n", i, numPasses, result);
-				break;
-			}
-		}
-
-		marioEffect->End();
+		targetVertices[i].x = (-marioState.position[0] + marioGeometry.position[i*3+0]) / MARIO_SCALE;
+		targetVertices[i].y = (-marioState.position[1] + marioGeometry.position[i*3+1]) / MARIO_SCALE;
+		targetVertices[i].z = (-marioState.position[2] + marioGeometry.position[i*3+2]) / MARIO_SCALE;
+		targetVertices[i].nx = marioGeometry.normal[i*3+0];
+		targetVertices[i].ny = marioGeometry.normal[i*3+1];
+		targetVertices[i].nz = marioGeometry.normal[i*3+2];
+		targetVertices[i].color = D3DCOLOR_ARGB(255, (UINT)(marioGeometry.color[i*3+0]*255), (UINT)(marioGeometry.color[i*3+1]*255), (UINT)(marioGeometry.color[i*3+2]*255));
+		targetVertices[i].u = marioGeometry.uv[i*2+0];
+		targetVertices[i].v = marioGeometry.uv[i*2+1];
 	}
 
-	HRESULT result = D3D_EndScene_Orig.stdcall<HRESULT>(pThis);
-	return result;
+	D3DXMATRIX projX(projMatrix);
+	D3DXMATRIX viewX(viewMatrix), viewXX(viewMatrix);
+	D3DXMATRIX worldX(1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1);
+	D3DXMatrixInverse(&viewX, 0, &viewXX);
+	D3DXMatrixTranslation(&worldX, marioState.position[0] / MARIO_SCALE,  marioState.position[1] / MARIO_SCALE,  marioState.position[2] / MARIO_SCALE);
+
+	marioEffect->SetMatrix("gProjMat", &projX);
+	marioEffect->SetMatrix("gViewMat", &viewX);
+	marioEffect->SetMatrix("gWorldMat", &worldX);
+	marioEffect->SetTexture("gTexture", marioTextureD3D9);
+	marioEffect->SetTechnique("SingleTexture");
+
+	unsigned int numPasses = 0;
+	marioEffect->Begin(&numPasses, 0);
+
+	for(unsigned int i = 0; i < numPasses; ++i)
+	{
+		marioEffect->BeginPass(i);
+
+		d3d9Device->SetFVF(D3DFVF_WALLEVERTEX);
+		HRESULT result = d3d9Device->DrawPrimitiveUP(D3DPT_TRIANGLELIST, marioGeometry.numTrianglesUsed, marioVerticesP, sizeof(WALLEVERTEX));
+
+		marioEffect->EndPass();
+
+		if (result != D3D_OK)
+		{
+			printf("error rendering pass %d out of %d: %d\n", i, numPasses, result);
+			break;
+		}
+	}
+
+	marioEffect->End();
 }
 
 
@@ -535,7 +513,6 @@ void modMain()
 	sm64_audio_init(romBuffer);
 	//sm64_set_sound_volume(0.5f);
 
-	for(int i=0; i<3*SM64_GEO_MAX_TRIANGLES; i++) marioIndices[i] = i;
 	delete[] romBuffer;
 
 	audio_thread_init();
@@ -561,10 +538,11 @@ void modMain()
 	D3D_RendererZ_BeginRender_Orig       = safetyhook::create_inline((void*)D3D_RendererZ_BeginRender, (void*)&D3D_RendererZ_BeginRender_Hook);
 	D3D_RendererZ_EndRender_Orig         = safetyhook::create_inline((void*)D3D_RendererZ_EndRender, (void*)&D3D_RendererZ_EndRender_Hook);
 	RendererZ_DrawString_Orig            = safetyhook::create_inline((void*)RendererZ_DrawString, (void*)&RendererZ_DrawString_Hook);
+	ClearZBuffer_Orig                    = safetyhook::create_inline((void*)ClearZBuffer, &ClearZBuffer_Hook);
 	D3D_RendererZ_PushProjMatrix_MidOrig = safetyhook::create_mid((void*)0x5b83fd, &D3D_RendererZ_PushProjMatrix_MidHook);
 	D3D_RendererZ_PushViewMatrix_MidOrig = safetyhook::create_mid((void*)0x596381, &D3D_RendererZ_PushViewMatrix_MidHook);
 	//D3D_RendererZ_PushProjMatrix_Orig    = safetyhook::create_inline((void*)D3D_RendererZ_PushProjMatrix, &D3D_RendererZ_PushProjMatrix_Hook);
-	D3D_RendererZ_PushViewMatrix_Orig    = safetyhook::create_inline((void*)D3D_RendererZ_PushViewMatrix, &D3D_RendererZ_PushViewMatrix_Hook);
+	//D3D_RendererZ_PushViewMatrix_Orig    = safetyhook::create_inline((void*)D3D_RendererZ_PushViewMatrix, &D3D_RendererZ_PushViewMatrix_Hook);
 }
 
 void modExit()
