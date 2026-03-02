@@ -10,7 +10,7 @@ Work in progress...
 * Super Mario 64 US ROM placed alongside WALL-E.exe, with filename sm64.z64
   * ROM must match SHA-1 hash 9bef1128717f958171a4afac3ed78ee2bb4e86ce
 * [Ultimate ASI Loader](https://github.com/ThirteenAG/Ultimate-ASI-Loader/releases/download/Win32-latest/version-Win32.zip) placed alongside WALL-E.exe
-* libsm64-wall-e.asi placed in WALL-E/scripts folder
+* sm64-wall-e.asi placed in WALL-E/scripts folder
 
 ## Requirements to compile
 * CodeBlocks
