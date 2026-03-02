@@ -53,11 +53,24 @@ auto RegisterCmd = 0x4763b0;
 auto RunCmd = 0x476580;
 auto ScriptManagerG_Init = 0x6b3c70;
 auto ScriptManagerG_GetMainPlayer = 0x6b3740;
-auto HandleManagerZ_GetPtr = 0x435440;
+auto HandleManagerZ_GetPtr = 0x586a70;
+auto LodMoveZ_GetPos = 0x435440;
+auto ObjectMoveZ_GetScale = 0x433170;
+auto ObjectMoveZ_GetRot = 0x4331e0;
+auto LodMoveZ_SetPos = 0x4354b0;
+auto LodMoveZ_SetPosAndRot = 0x435680;
+auto CreaturesMoveG_SetMyFuturePos = 0x5eef10;
 auto GameZ_Update = 0x438620;
+auto GameZ_GetFirstVp = 0x437dd0;
 auto CreaturesG_Init = 0x6970a0;
+auto CreaturesG_Sleep = 0x5ebb90;
+auto CreaturesG_WakeUp = 0x5ebbe0;
 auto PlayerG_Init = 0x69b4a0;
+auto PlayerG_Suspend = 0x60aa40;
+auto PlayerG_Restore = 0x60aa80;
 auto PlayerMoveG_Destructor = 0x64b530;
+auto PlayerMoveG_Stop = 0x60ea00;
+auto PlayerMoveG_SetMyDynPosAndRot = 0x60e390;
 auto D3D_RendererZ_Init = 0x59c750;
 auto D3D_RendererZ_Shut = 0x59cd50;
 auto D3D_RendererZ_BeginRender = 0x5b5120;
@@ -71,10 +84,23 @@ SafetyHookInline RunCmdOrig;
 SafetyHookInline ScriptManagerG_Init_Orig;
 SafetyHookInline ScriptManagerG_GetMainPlayer_Orig;
 SafetyHookInline HandleManagerZ_GetPtr_Orig;
+SafetyHookInline LodMoveZ_GetPos_Orig;
+SafetyHookInline ObjectMoveZ_GetScale_Orig;
+SafetyHookInline ObjectMoveZ_GetRot_Orig;
+SafetyHookInline LodMoveZ_SetPos_Orig;
+SafetyHookInline LodMoveZ_SetPosAndRot_Orig;
+SafetyHookInline CreaturesMoveG_SetMyFuturePos_Orig;
 SafetyHookInline GameZ_Update_Orig;
+SafetyHookInline GameZ_GetFirstVp_Orig;
 SafetyHookInline CreaturesG_Init_Orig;
+SafetyHookInline CreaturesG_Sleep_Orig;
+SafetyHookInline CreaturesG_WakeUp_Orig;
 SafetyHookInline PlayerG_Init_Orig;
+SafetyHookInline PlayerG_Suspend_Orig;
+SafetyHookInline PlayerG_Restore_Orig;
 SafetyHookInline PlayerMoveG_Destructor_Orig;
+SafetyHookInline PlayerMoveG_Stop_Orig;
+SafetyHookInline PlayerMoveG_SetMyDynPosAndRot_Orig;
 SafetyHookInline D3D_RendererZ_Init_Orig;
 SafetyHookInline D3D_RendererZ_Shut_Orig;
 SafetyHookInline D3D_RendererZ_BeginRender_Orig;
@@ -118,6 +144,7 @@ SAFETYHOOK_THISCALL void ScriptManagerG_Init_Hook(void* pThis)
 	ScriptManagerG_Init_Orig.thiscall<void>(pThis);
 }
 
+// 0x6b3740 PC
 SAFETYHOOK_THISCALL void* ScriptManagerG_GetMainPlayer_Hook(void* pThis, uint32_t param_2)
 {
 	void* pPlayer = ScriptManagerG_GetMainPlayer_Orig.thiscall<void*>(pThis, param_2);
@@ -125,40 +152,76 @@ SAFETYHOOK_THISCALL void* ScriptManagerG_GetMainPlayer_Hook(void* pThis, uint32_
 }
 
 void* HandleManagerZ = 0;
-// 0x435440 PC
-SAFETYHOOK_THISCALL void* HandleManagerZ_GetPtr_Hook(void* pThis, void* BaseObject_Z_param)
+// 0x586a70 PC
+SAFETYHOOK_THISCALL void* HandleManagerZ_GetPtr_Hook(void* pThis, void* param_2)
 {
 	if (HandleManagerZ != pThis) HandleManagerZ = pThis;
-	void* result = HandleManagerZ_GetPtr_Orig.thiscall<void*>(pThis, BaseObject_Z_param);
+	void* result = HandleManagerZ_GetPtr_Orig.thiscall<void*>(pThis, param_2);
 	return result;
 }
 
-// 0x4198f0 PC, 0x4c6a8 Mac
-SAFETYHOOK_THISCALL void GameZ_Update_Hook(void* pThis, float dt)
+// 0x435440 PC
+SAFETYHOOK_THISCALL float* LodMoveZ_GetPos_Hook(void* pThis, int param_2)
 {
-	//printf("Game_Z::Update(): %x, dt=%f\n", pThis, dt);
-	GameZ_Update_Orig.thiscall<void>(pThis, dt);
+	float* result = LodMoveZ_GetPos_Orig.thiscall<float*>(pThis, param_2);
+	//printf("LodMove_Z::GetPos(): %x, %d = {%.3f, %.3f, %.3f}\n", pThis, param_2, result[0], result[1], result[2]);
+	return result;
+}
 
-	if (marioId < 0) return;
+// 0x433170 PC
+SAFETYHOOK_THISCALL float ObjectMoveZ_GetScale_Hook(void* pThis, int param_2)
+{
+	return ObjectMoveZ_GetScale_Orig.thiscall<float>(pThis, param_2);
+}
 
-	void* pMainPlayer = ScriptManagerG_GetMainPlayer_Orig.thiscall<void*>(ScriptManagerG, 0);
-	if (!pMainPlayer)
-		return;
+// 0x4331e0 PC
+SAFETYHOOK_THISCALL float* ObjectMoveZ_GetRot_Hook(void* pThis, int param_2)
+{
+	return ObjectMoveZ_GetRot_Orig.thiscall<float*>(pThis, param_2);
+}
 
-	void* pHandle = HandleManagerZ_GetPtr_Orig.thiscall<void*>(HandleManagerZ, pMainPlayer + 0x70); // field 0x70 is BaseObject_Z
-	if (!pHandle)
-		return;
+// 0x4354b0 PC
+SAFETYHOOK_THISCALL void LodMoveZ_SetPos_Hook(void* pThis, float* pos, int param_3)
+{
+	//printf("LodMove_Z::SetPos(): %x, {%.3f, %.3f, %.3f}, %d\n", pThis, pos[0], pos[1], pos[2], param_3);
+	LodMoveZ_SetPos_Orig.thiscall<void>(pThis, pos, param_3);
+}
 
-	float x = *(float*)(pHandle + 0);
-	float y = *(float*)(pHandle + 4);
-	float z = *(float*)(pHandle + 8);
+// 0x435680 PC
+SAFETYHOOK_THISCALL void LodMoveZ_SetPosAndRot_Hook(void* pThis, float* pos, float* quat, int param_4)
+{
+	//printf("LodMove_Z::SetPosAndRot(): %x, {%.3f, %.3f, %.3f}, %d\n", pThis, pos[0], pos[1], pos[2], param_4);
+	LodMoveZ_SetPosAndRot_Orig.thiscall<void>(pThis, pos, quat, param_4);
+}
 
-	marioTimer += dt;
-	while (marioTimer > 1.f/30.f)
-	{
-		marioTimer -= 1.f/30.f;
-		sm64_mario_tick(marioId, &marioInput, &marioState, &marioGeometry);
-	}
+// 0x5eef10 PC
+SAFETYHOOK_THISCALL void CreaturesMoveG_SetMyFuturePos_Hook(void* pThis, float* pos, bool param_3)
+{
+	CreaturesMoveG_SetMyFuturePos_Orig.thiscall<void>(pThis, pos, param_3);
+}
+
+
+
+void* GameZ_Vp = 0;
+// 0x437dd0 PC
+SAFETYHOOK_THISCALL void* GameZ_GetFirstVp_Hook(void* pThis)
+{
+	GameZ_Vp = pThis;
+	return GameZ_GetFirstVp_Orig.thiscall<void*>(pThis);
+}
+
+// 0x60aa40 PC
+SAFETYHOOK_THISCALL void PlayerG_Suspend_Hook(void* pThis)
+{
+	printf("Player_G::Suspend(): %x\n", pThis);
+	PlayerG_Suspend_Orig.thiscall<void>(pThis);
+}
+
+// 0x60aa80 PC
+SAFETYHOOK_THISCALL void PlayerG_Restore_Hook(void* pThis)
+{
+	printf("Player_G::Restore(): %x\n", pThis);
+	PlayerG_Restore_Orig.thiscall<void>(pThis);
 }
 
 void* PlayerG = 0;
@@ -173,13 +236,15 @@ SAFETYHOOK_THISCALL void PlayerG_Init_Hook(void* pThis)
 	if (!pMainPlayer)
 		return;
 
-	void* pHandle = HandleManagerZ_GetPtr_Orig.thiscall<void*>(HandleManagerZ, pMainPlayer + 0x70); // field 0x70 is BaseObject_Z
-	if (!pHandle)
+	void* pPlayerMove = HandleManagerZ_GetPtr_Orig.thiscall<void*>(HandleManagerZ, pMainPlayer + 0x70); // field 0x70 is BaseObject_Z
+	if (!pPlayerMove)
 		return;
 
-	float x = *(float*)(pHandle + 0);
-	float y = *(float*)(pHandle + 4);
-	float z = *(float*)(pHandle + 8);
+	float* quat = ObjectMoveZ_GetRot_Orig.thiscall<float*>(pPlayerMove, 0);
+	float* pos = LodMoveZ_GetPos_Orig.thiscall<float*>(pPlayerMove, 0);
+	float x = pos[0];
+	float y = pos[1];
+	float z = pos[2];
 
 	// TODO: load level collision
 
@@ -187,7 +252,7 @@ SAFETYHOOK_THISCALL void PlayerG_Init_Hook(void* pThis)
 	// divide coordinates when converting from libsm64 to game
 	SM64Surface surfaces[2];
 	uint32_t surfaceCount = sizeof(surfaces) / sizeof(SM64Surface);
-	int width = 256 * MARIO_SCALE;
+	int size = 256 * MARIO_SCALE;
     int spawnX = x * MARIO_SCALE;
     int spawnY = y * MARIO_SCALE;
     int spawnZ = z * MARIO_SCALE;
@@ -199,13 +264,13 @@ SAFETYHOOK_THISCALL void PlayerG_Init_Hook(void* pThis)
 		surfaces[i].terrain = TERRAIN_STONE;
 	}
 
-	surfaces[0].vertices[0][0] = spawnX + width/2 + 128;	surfaces[0].vertices[0][1] = spawnY;	surfaces[0].vertices[0][2] = spawnZ+128;
-    surfaces[0].vertices[1][0] = spawnX - width/2 - 128;	surfaces[0].vertices[1][1] = spawnY;	surfaces[0].vertices[1][2] = spawnZ-128;
-    surfaces[0].vertices[2][0] = spawnX - width/2 - 128;	surfaces[0].vertices[2][1] = spawnY;	surfaces[0].vertices[2][2] = spawnZ+128;
+	surfaces[0].vertices[0][0] = spawnX + size;	surfaces[0].vertices[0][1] = spawnY;	surfaces[0].vertices[0][2] = spawnZ+size/2;
+    surfaces[0].vertices[1][0] = spawnX - size;	surfaces[0].vertices[1][1] = spawnY;	surfaces[0].vertices[1][2] = spawnZ-size/2;
+    surfaces[0].vertices[2][0] = spawnX - size;	surfaces[0].vertices[2][1] = spawnY;	surfaces[0].vertices[2][2] = spawnZ+size/2;
 
-    surfaces[1].vertices[0][0] = spawnX - width/2 - 128;	surfaces[1].vertices[0][1] = spawnY;	surfaces[1].vertices[0][2] = spawnZ-128;
-    surfaces[1].vertices[1][0] = spawnX + width/2 + 128;	surfaces[1].vertices[1][1] = spawnY;	surfaces[1].vertices[1][2] = spawnZ+128;
-    surfaces[1].vertices[2][0] = spawnX + width/2 + 128;	surfaces[1].vertices[2][1] = spawnY;	surfaces[1].vertices[2][2] = spawnZ-128;
+    surfaces[1].vertices[0][0] = spawnX - size;	surfaces[1].vertices[0][1] = spawnY;	surfaces[1].vertices[0][2] = spawnZ-size/2;
+    surfaces[1].vertices[1][0] = spawnX + size;	surfaces[1].vertices[1][1] = spawnY;	surfaces[1].vertices[1][2] = spawnZ+size/2;
+    surfaces[1].vertices[2][0] = spawnX + size;	surfaces[1].vertices[2][1] = spawnY;	surfaces[1].vertices[2][2] = spawnZ-size/2;
 
 	sm64_static_surfaces_load(surfaces, surfaceCount);
 
@@ -223,6 +288,9 @@ SAFETYHOOK_THISCALL void PlayerG_Init_Hook(void* pThis)
 	}
 	printf("Spawned Mario %d at %.2f, %.2f, %.2f\n", marioId, x * MARIO_SCALE, y * MARIO_SCALE, z * MARIO_SCALE);
 	marioTimer = 0;
+
+	//CreaturesG_Sleep_Orig.thiscall<void>(pMainPlayer);
+	CreaturesG_Sleep_Orig.thiscall<void>(pThis);
 }
 
 // 0x64b530 PC, 0x15ac56 Mac
@@ -241,11 +309,77 @@ SAFETYHOOK_THISCALL void* PlayerMoveG_Destructor_Hook(void* pThis, char param_2)
 	return result;
 }
 
+// 0x60ea00 PC
+SAFETYHOOK_THISCALL void PlayerMoveG_Stop_Hook(void* pThis)
+{
+	printf("PlayerMove_G::Stop(): %x\n", pThis);
+	PlayerMoveG_Stop_Orig.thiscall<void>(pThis);
+}
+
+// 0x60e390 PC
+SAFETYHOOK_THISCALL void PlayerMoveG_SetMyDynPosAndRot_Hook(void* pThis, float* pos, float* quat, bool param_4, bool param_5, bool param_6)
+{
+	printf("PlayerMove_G::SetMyDynPosAndRot(): %x, {%.2f, %.2f, %.2f}, {%.2f}, %d, %d, %d\n", pThis, pos[0], pos[1], pos[2], quat[0], param_4, param_5, param_6);
+	PlayerMoveG_SetMyDynPosAndRot_Orig.thiscall<void>(pThis, pos, quat, param_4, param_5, param_6);
+}
+
+// 0x4198f0 PC, 0x4c6a8 Mac
+SAFETYHOOK_THISCALL void GameZ_Update_Hook(int* pThis, float dt)
+{
+	//printf("Game_Z::Update(): %x, dt=%f\n", pThis, dt);
+
+	if (marioId >= 0)
+	{
+	}
+
+	GameZ_Update_Orig.thiscall<void>(pThis, dt);
+
+	if (marioId < 0) return;
+
+	//float* pos = LodMoveZ_GetPos_Orig.thiscall<float*>(pPlayerMove, 0);
+
+	marioTimer += dt;
+	while (marioTimer > 1.f/30.f)
+	{
+		marioTimer -= 1.f/30.f;
+		marioInput.stickY = 1;
+		sm64_mario_tick(marioId, &marioInput, &marioState, &marioGeometry);
+	}
+
+	void* pMainPlayer = ScriptManagerG_GetMainPlayer_Orig.thiscall<void*>(ScriptManagerG, 0);
+	if (!pMainPlayer)
+		return;
+
+	void* pPlayerMove = HandleManagerZ_GetPtr_Orig.thiscall<void*>(HandleManagerZ, pMainPlayer + 0x70); // field 0x70 is BaseObject_Z
+	if (!pPlayerMove)
+		return;
+
+	float* quat = ObjectMoveZ_GetRot_Orig.thiscall<float*>(pPlayerMove, 0);
+
+	float pos[3] = {0};
+	for (int i=0; i<3; i++) pos[i] = marioState.position[i] / MARIO_SCALE;
+	PlayerMoveG_SetMyDynPosAndRot_Orig.thiscall<void>(pPlayerMove, pos, quat, true, true, true);
+}
+
 // 0x6970a0 PC, 0x187ea6 Mac
 SAFETYHOOK_THISCALL void CreaturesG_Init_Hook(void* pThis, char param_2)
 {
 	printf("Creatures_G::Init(): %x, %d\n", pThis, param_2);
 	CreaturesG_Init_Orig.thiscall<void>(pThis, param_2);
+}
+
+// 0x5ebb90 PC
+SAFETYHOOK_THISCALL void CreaturesG_Sleep_Hook(void* pThis)
+{
+	printf("Creatures_G::Sleep(): %x\n", pThis);
+	CreaturesG_Sleep_Orig.thiscall<void>(pThis);
+}
+
+// 0x5ebbe0 PC
+SAFETYHOOK_THISCALL void CreaturesG_WakeUp_Hook(void* pThis)
+{
+	printf("Creatures_G::WakeUp(): %x\n", pThis);
+	CreaturesG_WakeUp_Orig.thiscall<void>(pThis);
 }
 
 // 0x59c750 PC
@@ -370,6 +504,7 @@ SAFETYHOOK_THISCALL void D3D_RendererZ_PushViewMatrix_Hook(void* pThis, float* m
 }
 
 int callCount = 0;
+// 0x58ffb0 PC
 SAFETYHOOK_THISCALL void ClearZBuffer_Hook(void* pThis, void* param_2, int param_3)
 {
 	callCount++;
@@ -529,10 +664,23 @@ void modMain()
 	ScriptManagerG_Init_Orig             = safetyhook::create_inline((void*)ScriptManagerG_Init, (void*)&ScriptManagerG_Init_Hook);
 	ScriptManagerG_GetMainPlayer_Orig    = safetyhook::create_inline((void*)ScriptManagerG_GetMainPlayer, (void*)&ScriptManagerG_GetMainPlayer_Hook);
 	HandleManagerZ_GetPtr_Orig           = safetyhook::create_inline((void*)HandleManagerZ_GetPtr, (void*)&HandleManagerZ_GetPtr_Hook);
+	LodMoveZ_GetPos_Orig                 = safetyhook::create_inline((void*)LodMoveZ_GetPos, (void*)&LodMoveZ_GetPos_Hook);
+	ObjectMoveZ_GetScale_Orig            = safetyhook::create_inline((void*)ObjectMoveZ_GetScale, (void*)&ObjectMoveZ_GetScale_Hook);
+	ObjectMoveZ_GetRot_Orig              = safetyhook::create_inline((void*)ObjectMoveZ_GetRot, (void*)&ObjectMoveZ_GetRot_Hook);
+	LodMoveZ_SetPos_Orig                 = safetyhook::create_inline((void*)LodMoveZ_SetPos, (void*)&LodMoveZ_SetPos_Hook);
+	LodMoveZ_SetPosAndRot_Orig           = safetyhook::create_inline((void*)LodMoveZ_SetPosAndRot, (void*)&LodMoveZ_SetPosAndRot_Hook);
+	CreaturesMoveG_SetMyFuturePos_Orig   = safetyhook::create_inline((void*)CreaturesMoveG_SetMyFuturePos, (void*)&CreaturesMoveG_SetMyFuturePos_Hook);
+	GameZ_GetFirstVp_Orig                = safetyhook::create_inline((void*)GameZ_GetFirstVp, (void*)&GameZ_GetFirstVp_Hook);
 	GameZ_Update_Orig                    = safetyhook::create_inline((void*)GameZ_Update, (void*)&GameZ_Update_Hook);
 	PlayerG_Init_Orig                    = safetyhook::create_inline((void*)PlayerG_Init, (void*)&PlayerG_Init_Hook);
+	PlayerG_Suspend_Orig                 = safetyhook::create_inline((void*)PlayerG_Suspend, (void*)&PlayerG_Suspend_Hook);
+	PlayerG_Restore_Orig                 = safetyhook::create_inline((void*)PlayerG_Restore, (void*)&PlayerG_Restore_Hook);
 	PlayerMoveG_Destructor_Orig          = safetyhook::create_inline((void*)PlayerMoveG_Destructor, (void*)&PlayerMoveG_Destructor_Hook);
+	PlayerMoveG_Stop_Orig                = safetyhook::create_inline((void*)PlayerMoveG_Stop, (void*)&PlayerMoveG_Stop_Hook);
+	PlayerMoveG_SetMyDynPosAndRot_Orig   = safetyhook::create_inline((void*)PlayerMoveG_SetMyDynPosAndRot, (void*)&PlayerMoveG_SetMyDynPosAndRot_Hook);
 	CreaturesG_Init_Orig                 = safetyhook::create_inline((void*)CreaturesG_Init, (void*)&CreaturesG_Init_Hook);
+	CreaturesG_Sleep_Orig                = safetyhook::create_inline((void*)CreaturesG_Sleep, (void*)&CreaturesG_Sleep_Hook);
+	CreaturesG_WakeUp_Orig               = safetyhook::create_inline((void*)CreaturesG_WakeUp, (void*)&CreaturesG_WakeUp_Hook);
 	D3D_RendererZ_Init_Orig              = safetyhook::create_inline((void*)D3D_RendererZ_Init, (void*)&D3D_RendererZ_Init_Hook);
 	D3D_RendererZ_Shut_Orig              = safetyhook::create_inline((void*)D3D_RendererZ_Shut, (void*)&D3D_RendererZ_Shut_Hook);
 	D3D_RendererZ_BeginRender_Orig       = safetyhook::create_inline((void*)D3D_RendererZ_BeginRender, (void*)&D3D_RendererZ_BeginRender_Hook);
