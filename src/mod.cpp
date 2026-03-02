@@ -18,6 +18,7 @@ extern "C" {
 #include "audio.h"
 #include "config.h"
 #include "marioEffect.h"
+#include "quatmath.h"
 
 #define D3DFVF_WALLEVERTEX (D3DFVF_XYZ | D3DFVF_NORMAL | D3DFVF_DIFFUSE | D3DFVF_TEX1)
 
@@ -242,9 +243,11 @@ SAFETYHOOK_THISCALL void PlayerG_Init_Hook(void* pThis)
 
 	float* quat = ObjectMoveZ_GetRot_Orig.thiscall<float*>(pPlayerMove, 0);
 	float* pos = LodMoveZ_GetPos_Orig.thiscall<float*>(pPlayerMove, 0);
+	float angle[3] = {0};
 	float x = pos[0];
 	float y = pos[1];
 	float z = pos[2];
+	ToEuler(quat, angle);
 
 	// TODO: load level collision
 
@@ -288,6 +291,7 @@ SAFETYHOOK_THISCALL void PlayerG_Init_Hook(void* pThis)
 	}
 	printf("Spawned Mario %d at %.2f, %.2f, %.2f\n", marioId, x * MARIO_SCALE, y * MARIO_SCALE, z * MARIO_SCALE);
 	marioTimer = 0;
+	sm64_set_mario_faceangle(marioId, angle[2]);
 
 	//CreaturesG_Sleep_Orig.thiscall<void>(pMainPlayer);
 	CreaturesG_Sleep_Orig.thiscall<void>(pThis);
@@ -324,41 +328,41 @@ SAFETYHOOK_THISCALL void PlayerMoveG_SetMyDynPosAndRot_Hook(void* pThis, float* 
 }
 
 // 0x4198f0 PC, 0x4c6a8 Mac
+float quat[4] = {0};
 SAFETYHOOK_THISCALL void GameZ_Update_Hook(int* pThis, float dt)
 {
 	//printf("Game_Z::Update(): %x, dt=%f\n", pThis, dt);
 
 	if (marioId >= 0)
 	{
+		//float* pos = LodMoveZ_GetPos_Orig.thiscall<float*>(pPlayerMove, 0);
+
+		marioTimer += dt;
+		while (marioTimer > 1.f/30.f)
+		{
+			marioTimer -= 1.f/30.f;
+			marioInput.stickY = 1;
+			sm64_mario_tick(marioId, &marioInput, &marioState, &marioGeometry);
+		}
+
+		void* pMainPlayer = ScriptManagerG_GetMainPlayer_Orig.thiscall<void*>(ScriptManagerG, 0);
+		if (!pMainPlayer)
+			return;
+
+		void* pPlayerMove = HandleManagerZ_GetPtr_Orig.thiscall<void*>(HandleManagerZ, pMainPlayer + 0x70); // field 0x70 is BaseObject_Z
+		if (!pPlayerMove)
+			return;
+
+		//float* quat = ObjectMoveZ_GetRot_Orig.thiscall<float*>(pPlayerMove, 0);
+		//printf("%.3f %.3f %.3f %.3f\n", quat[0], quat[1], quat[2], quat[3]);
+		ToQuat(marioState.angle, quat);
+
+		float pos[3] = {0};
+		for (int i=0; i<3; i++) pos[i] = marioState.position[i] / MARIO_SCALE;
+		PlayerMoveG_SetMyDynPosAndRot_Orig.thiscall<void>(pPlayerMove, pos, quat, true, true, true);
 	}
 
 	GameZ_Update_Orig.thiscall<void>(pThis, dt);
-
-	if (marioId < 0) return;
-
-	//float* pos = LodMoveZ_GetPos_Orig.thiscall<float*>(pPlayerMove, 0);
-
-	marioTimer += dt;
-	while (marioTimer > 1.f/30.f)
-	{
-		marioTimer -= 1.f/30.f;
-		marioInput.stickY = 1;
-		sm64_mario_tick(marioId, &marioInput, &marioState, &marioGeometry);
-	}
-
-	void* pMainPlayer = ScriptManagerG_GetMainPlayer_Orig.thiscall<void*>(ScriptManagerG, 0);
-	if (!pMainPlayer)
-		return;
-
-	void* pPlayerMove = HandleManagerZ_GetPtr_Orig.thiscall<void*>(HandleManagerZ, pMainPlayer + 0x70); // field 0x70 is BaseObject_Z
-	if (!pPlayerMove)
-		return;
-
-	float* quat = ObjectMoveZ_GetRot_Orig.thiscall<float*>(pPlayerMove, 0);
-
-	float pos[3] = {0};
-	for (int i=0; i<3; i++) pos[i] = marioState.position[i] / MARIO_SCALE;
-	PlayerMoveG_SetMyDynPosAndRot_Orig.thiscall<void>(pPlayerMove, pos, quat, true, true, true);
 }
 
 // 0x6970a0 PC, 0x187ea6 Mac
@@ -385,7 +389,7 @@ SAFETYHOOK_THISCALL void CreaturesG_WakeUp_Hook(void* pThis)
 // 0x59c750 PC
 SAFETYHOOK_THISCALL uint32_t D3D_RendererZ_Init_Hook(int* pThis, int width, int height, int param_4, char param_5)
 {
-	printf("D3D_Renderer_Z::Init(): %x %d %d %d %d\n", pThis, width, height, param_4, param_5, param_5);
+	printf("D3D_Renderer_Z::Init(): %x %d %d %d %d\n", pThis, width, height, param_4, param_5);
 	uint32_t result = D3D_RendererZ_Init_Orig.thiscall<uint32_t>(pThis, width, height, param_4, param_5);
 	d3d9Device = (LPDIRECT3DDEVICE9)(pThis[0xbac]);
 	printf("IDirect3DDevice9: %x\n", d3d9Device);
@@ -411,13 +415,7 @@ SAFETYHOOK_THISCALL uint32_t D3D_RendererZ_Init_Hook(int* pThis, int width, int 
 	ID3DXBuffer *errorBuffer = 0;
 	if (D3DXCreateEffect(d3d9Device, EFFECT_STR, strlen(EFFECT_STR), 0, 0, 0, 0, &marioEffect, &errorBuffer) != D3D_OK)
 	{
-		// Get the error string
-		const char *str = NULL;
-
-		if(errorBuffer)
-			Message((const char*)errorBuffer->GetBufferPointer());
-		else
-			Message("Error loading effect file");
+		Message(errorBuffer ? (const char*)errorBuffer->GetBufferPointer() : "Error loading effect file");
 	}
 	else
 		printf("D3DX9 marioEffect compiled\n");
@@ -472,7 +470,7 @@ SAFETYHOOK_THISCALL void D3D_RendererZ_EndRender_Hook(void* pThis, float param_2
 		RendererZ_DrawString_Orig.thiscall<void>(pThis, pos, buf, color, 0, 1, true);
 
 		pos[1] += 8;
-		sprintf(buf, "faceAngle %.2f", marioState.faceAngle);
+		sprintf(buf, "angle %.2f %.2f %.2f", marioState.angle[0], marioState.angle[1], marioState.angle[2]);
 		RendererZ_DrawString_Orig.thiscall<void>(pThis, pos, buf, color, 0, 1, true);
 
 		pos[1] += 8;
