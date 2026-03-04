@@ -4,6 +4,8 @@ Mod for WALL-E (PC) that replaces the player with Mario from Super Mario 64 by u
 
 Work in progress...
 
+![screenshot](screenshot.png)
+
 ## Requirements to play
 
 * Installation of WALL-E on PC, either the original disc release (untested) or from Steam
