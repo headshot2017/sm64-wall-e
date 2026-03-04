@@ -10,14 +10,14 @@ void ToQuat(float* in, float* out)
 	float roll = in[2];
 
 	float rollOver2 = roll * 0.5f;
-	float sinRollOver2 = sinf(rollOver2);
 	float cosRollOver2 = cosf(rollOver2);
+	float sinRollOver2 = sinf(rollOver2);
 	float pitchOver2 = pitch * 0.5f;
-	float sinPitchOver2 = sinf(pitchOver2);
 	float cosPitchOver2 = cosf(pitchOver2);
+	float sinPitchOver2 = sinf(pitchOver2);
 	float yawOver2 = yaw * 0.5f;
-	float sinYawOver2 = sinf(yawOver2);
 	float cosYawOver2 = cosf(yawOver2);
+	float sinYawOver2 = sinf(yawOver2);
 
 	out[0] = cosYawOver2 * sinPitchOver2 * cosRollOver2 + sinYawOver2 * cosPitchOver2 * sinRollOver2; // x
 	out[1] = sinYawOver2 * cosPitchOver2 * cosRollOver2 - cosYawOver2 * sinPitchOver2 * sinRollOver2; // y
@@ -49,7 +49,10 @@ void ToEuler(float* in, float* out)
 		return;
 	}
 
-	out[0] = asinf(2.f * (in[0] * in[2] - in[3] * in[1]));                             // Pitch
-	out[1] = atan2f(2.f * in[0] * in[3] + 2.f * in[1] * in[2], 1 - 2.f * (in[2] * in[2] + in[3] * in[3]));     // Yaw
-	out[2] = atan2f(2.f * in[0] * in[1] + 2.f * in[2] * in[3], 1 - 2.f * (in[1] * in[1] + in[2] * in[2]));      // Roll
+	out[0] = asinf(2.f * (in[3] * in[0] - in[1] * in[2]));                             // Pitch
+	out[1] = atan2f(2.f * in[3] * in[1] + 2.f * in[2] * in[0], 1 - 2.f * (in[0] * in[0] + in[1] * in[1]));     // Yaw
+	out[2] = atan2f(2.f * in[3] * in[2] + 2.f * in[0] * in[1], 1 - 2.f * (in[2] * in[2] + in[0] * in[0]));      // Roll
+
+	for (int i=0; i<3; i++)
+		while (out[i] < 0) out[i] += M_PI;
 }

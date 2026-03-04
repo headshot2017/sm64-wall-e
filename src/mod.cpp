@@ -72,6 +72,8 @@ auto PlayerG_Restore = 0x60aa80;
 auto PlayerMoveG_Destructor = 0x64b530;
 auto PlayerMoveG_Stop = 0x60ea00;
 auto PlayerMoveG_SetMyDynPosAndRot = 0x60e390;
+auto CameraMoveG_Init = 0x5e2f10;
+auto CameraEngineZ_GetCameraNode = 0x40ae90;
 auto D3D_RendererZ_Init = 0x59c750;
 auto D3D_RendererZ_Shut = 0x59cd50;
 auto D3D_RendererZ_BeginRender = 0x5b5120;
@@ -102,6 +104,8 @@ SafetyHookInline PlayerG_Restore_Orig;
 SafetyHookInline PlayerMoveG_Destructor_Orig;
 SafetyHookInline PlayerMoveG_Stop_Orig;
 SafetyHookInline PlayerMoveG_SetMyDynPosAndRot_Orig;
+SafetyHookInline CameraMoveG_Init_Orig;
+SafetyHookInline CameraEngineZ_GetCameraNode_Orig;
 SafetyHookInline D3D_RendererZ_Init_Orig;
 SafetyHookInline D3D_RendererZ_Shut_Orig;
 SafetyHookInline D3D_RendererZ_BeginRender_Orig;
@@ -153,6 +157,7 @@ SAFETYHOOK_THISCALL void* ScriptManagerG_GetMainPlayer_Hook(void* pThis, uint32_
 }
 
 void* HandleManagerZ = 0;
+void* gData = (void*)0x3f0018;
 // 0x586a70 PC
 SAFETYHOOK_THISCALL void* HandleManagerZ_GetPtr_Hook(void* pThis, void* param_2)
 {
@@ -327,6 +332,19 @@ SAFETYHOOK_THISCALL void PlayerMoveG_SetMyDynPosAndRot_Hook(void* pThis, float* 
 	PlayerMoveG_SetMyDynPosAndRot_Orig.thiscall<void>(pThis, pos, quat, param_4, param_5, param_6);
 }
 
+void* CameraMoveG = 0;
+SAFETYHOOK_THISCALL void CameraMoveG_Init_Hook(void* pThis)
+{
+	printf("CameraMove_G::Init(): %x\n", pThis);
+	CameraMoveG = pThis;
+	CameraMoveG_Init_Orig.thiscall<void>(pThis);
+}
+
+SAFETYHOOK_THISCALL void* CameraEngineZ_GetCameraNode_Hook(void* pThis)
+{
+	return CameraEngineZ_GetCameraNode_Orig.thiscall<void*>(pThis);
+}
+
 // 0x4198f0 PC, 0x4c6a8 Mac
 float quat[4] = {0};
 SAFETYHOOK_THISCALL void GameZ_Update_Hook(int* pThis, float dt)
@@ -337,29 +355,51 @@ SAFETYHOOK_THISCALL void GameZ_Update_Hook(int* pThis, float dt)
 	{
 		//float* pos = LodMoveZ_GetPos_Orig.thiscall<float*>(pPlayerMove, 0);
 
+		void* pMainPlayer = ScriptManagerG_GetMainPlayer_Orig.thiscall<void*>(ScriptManagerG, 0);
+		void* pPlayerMove = (pMainPlayer) ? HandleManagerZ_GetPtr_Orig.thiscall<void*>(HandleManagerZ, pMainPlayer + 0x70) : 0; // field 0x70 is BaseObject_Z
+
 		marioTimer += dt;
 		while (marioTimer > 1.f/30.f)
 		{
 			marioTimer -= 1.f/30.f;
-			marioInput.stickY = 1;
+
+			if (pPlayerMove && CameraMoveG)
+			{
+				void* CamNodeBase = CameraEngineZ_GetCameraNode_Orig.thiscall<void*>(CameraMoveG);
+				void* CamNode = HandleManagerZ_GetPtr_Orig.thiscall<void*>(HandleManagerZ, CamNodeBase);
+				void* CameraZ = (void*)(*(int *)(CamNode + 0x130));
+
+
+				// from PlayerMove_G::GetPlayerInput() (0x60f530)
+				void* PInput_G = (void*)(pPlayerMove + 0xac8);
+
+				marioInput.buttonA = *(uint8_t *)(PInput_G + 0x20); // jump
+				marioInput.buttonB = *(uint8_t *)(PInput_G + 0x34); // action / attack
+				marioInput.buttonZ = *(uint8_t *)(PInput_G + 0x0c); // crouch
+				marioInput.stickX = *(float *)(PInput_G + 0x280);
+				marioInput.stickY = -*(float *)(PInput_G + 0x288);
+				marioInput.camLookX = *(float *)(CameraZ + 0x080);
+				marioInput.camLookZ = -*(float *)(CameraZ + 0x078);
+				//float rStickX = *(float *)(PInput_G + 0x28c);
+				//float rStickY = *(float *)(PInput_G + 0x294);
+				//uint8_t rejectBotMusic = *(uint8_t *)(PInput_G + 0x70);
+				//uint8_t firstPerson = *(uint8_t *)(PInput_G + 0x5c);
+				//uint8_t laser = *(uint8_t *)(PInput_G + 0x48); // also applies to 0x84 for some reason
+			}
+
 			sm64_mario_tick(marioId, &marioInput, &marioState, &marioGeometry);
 		}
 
-		void* pMainPlayer = ScriptManagerG_GetMainPlayer_Orig.thiscall<void*>(ScriptManagerG, 0);
-		if (!pMainPlayer)
-			return;
+		if (pPlayerMove)
+		{
+			//float* quat = ObjectMoveZ_GetRot_Orig.thiscall<float*>(pPlayerMove, 0);
+			//printf("%.3f %.3f %.3f %.3f\n", quat[0], quat[1], quat[2], quat[3]);
+			ToQuat(marioState.angle, quat);
 
-		void* pPlayerMove = HandleManagerZ_GetPtr_Orig.thiscall<void*>(HandleManagerZ, pMainPlayer + 0x70); // field 0x70 is BaseObject_Z
-		if (!pPlayerMove)
-			return;
-
-		//float* quat = ObjectMoveZ_GetRot_Orig.thiscall<float*>(pPlayerMove, 0);
-		//printf("%.3f %.3f %.3f %.3f\n", quat[0], quat[1], quat[2], quat[3]);
-		ToQuat(marioState.angle, quat);
-
-		float pos[3] = {0};
-		for (int i=0; i<3; i++) pos[i] = marioState.position[i] / MARIO_SCALE;
-		PlayerMoveG_SetMyDynPosAndRot_Orig.thiscall<void>(pPlayerMove, pos, quat, true, true, true);
+			float pos[3] = {0};
+			for (int i=0; i<3; i++) pos[i] = marioState.position[i] / MARIO_SCALE;
+			PlayerMoveG_SetMyDynPosAndRot_Orig.thiscall<void>(pPlayerMove, pos, quat, true, true, true);
+		}
 	}
 
 	GameZ_Update_Orig.thiscall<void>(pThis, dt);
@@ -476,6 +516,30 @@ SAFETYHOOK_THISCALL void D3D_RendererZ_EndRender_Hook(void* pThis, float param_2
 		pos[1] += 8;
 		sprintf(buf, "health %03x", marioState.health);
 		RendererZ_DrawString_Orig.thiscall<void>(pThis, pos, buf, color, 0, 1, true);
+
+		/*
+		// dump
+		if (CameraMoveG)
+		{
+			void* CamNodeBase = CameraEngineZ_GetCameraNode_Orig.thiscall<void*>(CameraMoveG);
+			void* CamNode = HandleManagerZ_GetPtr_Orig.thiscall<void*>(HandleManagerZ, CamNodeBase);
+			void* CameraZ = (void*)(*(int *)(CamNode + 0x130));
+
+			for (int i=0x000; i<0x500; i+=4)
+			{
+				int offset = i - 0x000;
+				pos[0] = 284;
+				pos[1] = offset/4*8;
+				while (pos[1] > 720-8)
+				{
+					pos[0] += 224;
+					pos[1] -= 720;
+				}
+				sprintf(buf, "0x%03x=%d (%.3f)", i, *(int *)(CameraZ + i), *(float *)(CameraZ + i));
+				RendererZ_DrawString_Orig.thiscall<void>(pThis, pos, buf, color, 0, 1, true);
+			}
+		}
+		*/
 	}
 
 	D3D_RendererZ_EndRender_Orig.thiscall<void>(pThis, param_2);
@@ -676,6 +740,8 @@ void modMain()
 	PlayerMoveG_Destructor_Orig          = safetyhook::create_inline((void*)PlayerMoveG_Destructor, (void*)&PlayerMoveG_Destructor_Hook);
 	PlayerMoveG_Stop_Orig                = safetyhook::create_inline((void*)PlayerMoveG_Stop, (void*)&PlayerMoveG_Stop_Hook);
 	PlayerMoveG_SetMyDynPosAndRot_Orig   = safetyhook::create_inline((void*)PlayerMoveG_SetMyDynPosAndRot, (void*)&PlayerMoveG_SetMyDynPosAndRot_Hook);
+	CameraMoveG_Init_Orig                = safetyhook::create_inline((void*)CameraMoveG_Init, (void*)&CameraMoveG_Init_Hook);
+	CameraEngineZ_GetCameraNode_Orig     = safetyhook::create_inline((void*)CameraEngineZ_GetCameraNode, (void*)&CameraEngineZ_GetCameraNode_Hook);
 	CreaturesG_Init_Orig                 = safetyhook::create_inline((void*)CreaturesG_Init, (void*)&CreaturesG_Init_Hook);
 	CreaturesG_Sleep_Orig                = safetyhook::create_inline((void*)CreaturesG_Sleep, (void*)&CreaturesG_Sleep_Hook);
 	CreaturesG_WakeUp_Orig               = safetyhook::create_inline((void*)CreaturesG_WakeUp, (void*)&CreaturesG_WakeUp_Hook);
