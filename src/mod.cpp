@@ -12,6 +12,7 @@ extern "C" {
     #include "libsm64/decomp/include/PR/ultratypes.h"
     #include "libsm64/decomp/include/audio_defines.h"
     #include "libsm64/decomp/include/surface_terrains.h"
+    #include "libsm64/decomp/include/seq_ids.h"
 }
 
 #include "mod.h"
@@ -72,9 +73,12 @@ auto PlayerG_Restore = 0x60aa80;
 auto PlayerMoveG_Destructor = 0x64b530;
 auto PlayerMoveG_Stop = 0x60ea00;
 auto PlayerMoveG_SetMyDynPosAndRot = 0x60e390;
+auto PlayerMoveG_IsCurrentMusicForRejected = 0x60e020;
+auto PlayerMoveG_GetMusicForRejected = 0x60e0c0;
 auto CameraMoveG_Init = 0x5e2f10;
 auto CameraEngineZ_GetCameraNode = 0x40ae90;
 auto P_WALLE_0x608ee0 = 0x608ee0;
+auto MusicManagerG_SetMusicZone = 0x644370;
 auto D3D_RendererZ_Init = 0x59c750;
 auto D3D_RendererZ_Shut = 0x59cd50;
 auto D3D_RendererZ_BeginRender = 0x5b5120;
@@ -105,9 +109,12 @@ SafetyHookInline PlayerG_Restore_Orig;
 SafetyHookInline PlayerMoveG_Destructor_Orig;
 SafetyHookInline PlayerMoveG_Stop_Orig;
 SafetyHookInline PlayerMoveG_SetMyDynPosAndRot_Orig;
+SafetyHookInline PlayerMoveG_IsCurrentMusicForRejected_Orig;
+SafetyHookInline PlayerMoveG_GetMusicForRejected_Orig;
 SafetyHookInline CameraMoveG_Init_Orig;
 SafetyHookInline CameraEngineZ_GetCameraNode_Orig;
 SafetyHookInline P_WALLE_0x608ee0_Orig;
+SafetyHookInline MusicManagerG_SetMusicZone_Orig;
 SafetyHookInline D3D_RendererZ_Init_Orig;
 SafetyHookInline D3D_RendererZ_Shut_Orig;
 SafetyHookInline D3D_RendererZ_BeginRender_Orig;
@@ -338,7 +345,21 @@ SAFETYHOOK_THISCALL void PlayerMoveG_SetMyDynPosAndRot_Hook(void* pThis, float* 
 	PlayerMoveG_SetMyDynPosAndRot_Orig.thiscall<void>(pThis, pos, quat, param_4, param_5, param_6);
 }
 
+// 0x60e020 PC
+SAFETYHOOK_THISCALL bool PlayerMoveG_IsCurrentMusicForRejected_Hook(void* pThis)
+{
+	if (marioId >= 0) return sm64_get_current_background_music() != 0xffff;
+	return PlayerMoveG_IsCurrentMusicForRejected_Orig.thiscall<bool>(pThis);
+}
+
+// 0x60e0c0 PC
+SAFETYHOOK_THISCALL uint32_t PlayerMoveG_GetMusicForRejected_Hook(void* pThis)
+{
+	return PlayerMoveG_GetMusicForRejected_Orig.thiscall<uint32_t>(pThis) + (marioId >= 0 ? 0x1000 : 0);
+}
+
 void* CameraMoveG = 0;
+// 0x5e2f10 PC
 SAFETYHOOK_THISCALL void CameraMoveG_Init_Hook(void* pThis)
 {
 	printf("CameraMove_G::Init(): %x\n", pThis);
@@ -346,15 +367,31 @@ SAFETYHOOK_THISCALL void CameraMoveG_Init_Hook(void* pThis)
 	CameraMoveG_Init_Orig.thiscall<void>(pThis);
 }
 
+// 0x40ae90 PC
 SAFETYHOOK_THISCALL void* CameraEngineZ_GetCameraNode_Hook(void* pThis)
 {
 	return CameraEngineZ_GetCameraNode_Orig.thiscall<void*>(pThis);
 }
 
+// 0x608ee0 PC
 SAFETYHOOK_THISCALL uint32_t P_WALLE_0x608ee0_Hook(void* pThis)
 {
 	// draw tire tracks only if mario is not there
 	return (marioId < 0);
+}
+
+// 0x644370 PC
+SAFETYHOOK_THISCALL void MusicManagerG_SetMusicZone_Hook(void* pThis, uint32_t musicID, float param_3)
+{
+	void* pMainPlayer = ScriptManagerG_GetMainPlayer_Orig.thiscall<void*>(ScriptManagerG, 0);
+	void* pPlayerMove = (pMainPlayer) ? HandleManagerZ_GetPtr_Orig.thiscall<void*>(HandleManagerZ, pMainPlayer + 0x70) : 0; // field 0x70 is BaseObject_Z
+
+	if (musicID >= 0x1000)
+		sm64_play_music(0, SEQ_LEVEL_GRASS, 0);
+	else
+		sm64_stop_background_music(SEQ_LEVEL_GRASS);
+
+	MusicManagerG_SetMusicZone_Orig.thiscall<void>(pThis, musicID, param_3);
 }
 
 // 0x4198f0 PC, 0x4c6a8 Mac
@@ -734,41 +771,44 @@ void modMain()
     marioGeometry.uv       = new float[2 * 3 * SM64_GEO_MAX_TRIANGLES];
     marioGeometry.numTrianglesUsed = 0;
 
-	//RegisterCmdOrig                      = safetyhook::create_inline((void*)RegisterCmd, (void*)&RegisterCmdHook);
-	RunCmdOrig                           = safetyhook::create_inline((void*)RunCmd, (void*)&RunCmdHook);
-	ScriptManagerG_Init_Orig             = safetyhook::create_inline((void*)ScriptManagerG_Init, (void*)&ScriptManagerG_Init_Hook);
-	ScriptManagerG_GetMainPlayer_Orig    = safetyhook::create_inline((void*)ScriptManagerG_GetMainPlayer, (void*)&ScriptManagerG_GetMainPlayer_Hook);
-	HandleManagerZ_GetPtr_Orig           = safetyhook::create_inline((void*)HandleManagerZ_GetPtr, (void*)&HandleManagerZ_GetPtr_Hook);
-	LodMoveZ_GetPos_Orig                 = safetyhook::create_inline((void*)LodMoveZ_GetPos, (void*)&LodMoveZ_GetPos_Hook);
-	ObjectMoveZ_GetScale_Orig            = safetyhook::create_inline((void*)ObjectMoveZ_GetScale, (void*)&ObjectMoveZ_GetScale_Hook);
-	ObjectMoveZ_GetRot_Orig              = safetyhook::create_inline((void*)ObjectMoveZ_GetRot, (void*)&ObjectMoveZ_GetRot_Hook);
-	LodMoveZ_SetPos_Orig                 = safetyhook::create_inline((void*)LodMoveZ_SetPos, (void*)&LodMoveZ_SetPos_Hook);
-	LodMoveZ_SetPosAndRot_Orig           = safetyhook::create_inline((void*)LodMoveZ_SetPosAndRot, (void*)&LodMoveZ_SetPosAndRot_Hook);
-	CreaturesMoveG_SetMyFuturePos_Orig   = safetyhook::create_inline((void*)CreaturesMoveG_SetMyFuturePos, (void*)&CreaturesMoveG_SetMyFuturePos_Hook);
-	GameZ_GetFirstVp_Orig                = safetyhook::create_inline((void*)GameZ_GetFirstVp, (void*)&GameZ_GetFirstVp_Hook);
-	GameZ_Update_Orig                    = safetyhook::create_inline((void*)GameZ_Update, (void*)&GameZ_Update_Hook);
-	PlayerG_Init_Orig                    = safetyhook::create_inline((void*)PlayerG_Init, (void*)&PlayerG_Init_Hook);
-	PlayerG_Suspend_Orig                 = safetyhook::create_inline((void*)PlayerG_Suspend, (void*)&PlayerG_Suspend_Hook);
-	PlayerG_Restore_Orig                 = safetyhook::create_inline((void*)PlayerG_Restore, (void*)&PlayerG_Restore_Hook);
-	PlayerMoveG_Destructor_Orig          = safetyhook::create_inline((void*)PlayerMoveG_Destructor, (void*)&PlayerMoveG_Destructor_Hook);
-	PlayerMoveG_Stop_Orig                = safetyhook::create_inline((void*)PlayerMoveG_Stop, (void*)&PlayerMoveG_Stop_Hook);
-	PlayerMoveG_SetMyDynPosAndRot_Orig   = safetyhook::create_inline((void*)PlayerMoveG_SetMyDynPosAndRot, (void*)&PlayerMoveG_SetMyDynPosAndRot_Hook);
-	CameraMoveG_Init_Orig                = safetyhook::create_inline((void*)CameraMoveG_Init, (void*)&CameraMoveG_Init_Hook);
-	CameraEngineZ_GetCameraNode_Orig     = safetyhook::create_inline((void*)CameraEngineZ_GetCameraNode, (void*)&CameraEngineZ_GetCameraNode_Hook);
-	P_WALLE_0x608ee0_Orig                = safetyhook::create_inline((void*)P_WALLE_0x608ee0, (void*)&P_WALLE_0x608ee0_Hook);
-	CreaturesG_Init_Orig                 = safetyhook::create_inline((void*)CreaturesG_Init, (void*)&CreaturesG_Init_Hook);
-	CreaturesG_Sleep_Orig                = safetyhook::create_inline((void*)CreaturesG_Sleep, (void*)&CreaturesG_Sleep_Hook);
-	CreaturesG_WakeUp_Orig               = safetyhook::create_inline((void*)CreaturesG_WakeUp, (void*)&CreaturesG_WakeUp_Hook);
-	D3D_RendererZ_Init_Orig              = safetyhook::create_inline((void*)D3D_RendererZ_Init, (void*)&D3D_RendererZ_Init_Hook);
-	D3D_RendererZ_Shut_Orig              = safetyhook::create_inline((void*)D3D_RendererZ_Shut, (void*)&D3D_RendererZ_Shut_Hook);
-	D3D_RendererZ_BeginRender_Orig       = safetyhook::create_inline((void*)D3D_RendererZ_BeginRender, (void*)&D3D_RendererZ_BeginRender_Hook);
-	D3D_RendererZ_EndRender_Orig         = safetyhook::create_inline((void*)D3D_RendererZ_EndRender, (void*)&D3D_RendererZ_EndRender_Hook);
-	RendererZ_DrawString_Orig            = safetyhook::create_inline((void*)RendererZ_DrawString, (void*)&RendererZ_DrawString_Hook);
-	ClearZBuffer_Orig                    = safetyhook::create_inline((void*)ClearZBuffer, &ClearZBuffer_Hook);
-	D3D_RendererZ_PushProjMatrix_MidOrig = safetyhook::create_mid((void*)0x5b83fd, &D3D_RendererZ_PushProjMatrix_MidHook);
-	D3D_RendererZ_PushViewMatrix_MidOrig = safetyhook::create_mid((void*)0x596381, &D3D_RendererZ_PushViewMatrix_MidHook);
-	//D3D_RendererZ_PushProjMatrix_Orig    = safetyhook::create_inline((void*)D3D_RendererZ_PushProjMatrix, &D3D_RendererZ_PushProjMatrix_Hook);
-	//D3D_RendererZ_PushViewMatrix_Orig    = safetyhook::create_inline((void*)D3D_RendererZ_PushViewMatrix, &D3D_RendererZ_PushViewMatrix_Hook);
+	//RegisterCmdOrig                            = safetyhook::create_inline((void*)RegisterCmd, (void*)&RegisterCmdHook);
+	RunCmdOrig                                 = safetyhook::create_inline((void*)RunCmd, (void*)&RunCmdHook);
+	ScriptManagerG_Init_Orig                   = safetyhook::create_inline((void*)ScriptManagerG_Init, (void*)&ScriptManagerG_Init_Hook);
+	ScriptManagerG_GetMainPlayer_Orig          = safetyhook::create_inline((void*)ScriptManagerG_GetMainPlayer, (void*)&ScriptManagerG_GetMainPlayer_Hook);
+	HandleManagerZ_GetPtr_Orig                 = safetyhook::create_inline((void*)HandleManagerZ_GetPtr, (void*)&HandleManagerZ_GetPtr_Hook);
+	LodMoveZ_GetPos_Orig                       = safetyhook::create_inline((void*)LodMoveZ_GetPos, (void*)&LodMoveZ_GetPos_Hook);
+	ObjectMoveZ_GetScale_Orig                  = safetyhook::create_inline((void*)ObjectMoveZ_GetScale, (void*)&ObjectMoveZ_GetScale_Hook);
+	ObjectMoveZ_GetRot_Orig                    = safetyhook::create_inline((void*)ObjectMoveZ_GetRot, (void*)&ObjectMoveZ_GetRot_Hook);
+	LodMoveZ_SetPos_Orig                       = safetyhook::create_inline((void*)LodMoveZ_SetPos, (void*)&LodMoveZ_SetPos_Hook);
+	LodMoveZ_SetPosAndRot_Orig                 = safetyhook::create_inline((void*)LodMoveZ_SetPosAndRot, (void*)&LodMoveZ_SetPosAndRot_Hook);
+	CreaturesMoveG_SetMyFuturePos_Orig         = safetyhook::create_inline((void*)CreaturesMoveG_SetMyFuturePos, (void*)&CreaturesMoveG_SetMyFuturePos_Hook);
+	GameZ_GetFirstVp_Orig                      = safetyhook::create_inline((void*)GameZ_GetFirstVp, (void*)&GameZ_GetFirstVp_Hook);
+	GameZ_Update_Orig                          = safetyhook::create_inline((void*)GameZ_Update, (void*)&GameZ_Update_Hook);
+	PlayerG_Init_Orig                          = safetyhook::create_inline((void*)PlayerG_Init, (void*)&PlayerG_Init_Hook);
+	PlayerG_Suspend_Orig                       = safetyhook::create_inline((void*)PlayerG_Suspend, (void*)&PlayerG_Suspend_Hook);
+	PlayerG_Restore_Orig                       = safetyhook::create_inline((void*)PlayerG_Restore, (void*)&PlayerG_Restore_Hook);
+	PlayerMoveG_Destructor_Orig                = safetyhook::create_inline((void*)PlayerMoveG_Destructor, (void*)&PlayerMoveG_Destructor_Hook);
+	PlayerMoveG_Stop_Orig                      = safetyhook::create_inline((void*)PlayerMoveG_Stop, (void*)&PlayerMoveG_Stop_Hook);
+	PlayerMoveG_SetMyDynPosAndRot_Orig         = safetyhook::create_inline((void*)PlayerMoveG_SetMyDynPosAndRot, (void*)&PlayerMoveG_SetMyDynPosAndRot_Hook);
+	PlayerMoveG_IsCurrentMusicForRejected_Orig = safetyhook::create_inline((void*)PlayerMoveG_IsCurrentMusicForRejected, (void*)&PlayerMoveG_IsCurrentMusicForRejected_Hook);
+	PlayerMoveG_GetMusicForRejected_Orig       = safetyhook::create_inline((void*)PlayerMoveG_GetMusicForRejected, (void*)&PlayerMoveG_GetMusicForRejected_Hook);
+	CameraMoveG_Init_Orig                      = safetyhook::create_inline((void*)CameraMoveG_Init, (void*)&CameraMoveG_Init_Hook);
+	CameraEngineZ_GetCameraNode_Orig           = safetyhook::create_inline((void*)CameraEngineZ_GetCameraNode, (void*)&CameraEngineZ_GetCameraNode_Hook);
+	P_WALLE_0x608ee0_Orig                      = safetyhook::create_inline((void*)P_WALLE_0x608ee0, (void*)&P_WALLE_0x608ee0_Hook);
+	MusicManagerG_SetMusicZone_Orig            = safetyhook::create_inline((void*)MusicManagerG_SetMusicZone, (void*)&MusicManagerG_SetMusicZone_Hook);
+	CreaturesG_Init_Orig                       = safetyhook::create_inline((void*)CreaturesG_Init, (void*)&CreaturesG_Init_Hook);
+	CreaturesG_Sleep_Orig                      = safetyhook::create_inline((void*)CreaturesG_Sleep, (void*)&CreaturesG_Sleep_Hook);
+	CreaturesG_WakeUp_Orig                     = safetyhook::create_inline((void*)CreaturesG_WakeUp, (void*)&CreaturesG_WakeUp_Hook);
+	D3D_RendererZ_Init_Orig                    = safetyhook::create_inline((void*)D3D_RendererZ_Init, (void*)&D3D_RendererZ_Init_Hook);
+	D3D_RendererZ_Shut_Orig                    = safetyhook::create_inline((void*)D3D_RendererZ_Shut, (void*)&D3D_RendererZ_Shut_Hook);
+	D3D_RendererZ_BeginRender_Orig             = safetyhook::create_inline((void*)D3D_RendererZ_BeginRender, (void*)&D3D_RendererZ_BeginRender_Hook);
+	D3D_RendererZ_EndRender_Orig               = safetyhook::create_inline((void*)D3D_RendererZ_EndRender, (void*)&D3D_RendererZ_EndRender_Hook);
+	RendererZ_DrawString_Orig                  = safetyhook::create_inline((void*)RendererZ_DrawString, (void*)&RendererZ_DrawString_Hook);
+	ClearZBuffer_Orig                          = safetyhook::create_inline((void*)ClearZBuffer, &ClearZBuffer_Hook);
+	D3D_RendererZ_PushProjMatrix_MidOrig       = safetyhook::create_mid((void*)0x5b83fd, &D3D_RendererZ_PushProjMatrix_MidHook);
+	D3D_RendererZ_PushViewMatrix_MidOrig       = safetyhook::create_mid((void*)0x596381, &D3D_RendererZ_PushViewMatrix_MidHook);
+	//D3D_RendererZ_PushProjMatrix_Orig          = safetyhook::create_inline((void*)D3D_RendererZ_PushProjMatrix, &D3D_RendererZ_PushProjMatrix_Hook);
+	//D3D_RendererZ_PushViewMatrix_Orig          = safetyhook::create_inline((void*)D3D_RendererZ_PushViewMatrix, &D3D_RendererZ_PushViewMatrix_Hook);
 }
 
 void modExit()
