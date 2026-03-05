@@ -74,6 +74,7 @@ auto PlayerMoveG_Stop = 0x60ea00;
 auto PlayerMoveG_SetMyDynPosAndRot = 0x60e390;
 auto CameraMoveG_Init = 0x5e2f10;
 auto CameraEngineZ_GetCameraNode = 0x40ae90;
+auto P_WALLE_0x608ee0 = 0x608ee0;
 auto D3D_RendererZ_Init = 0x59c750;
 auto D3D_RendererZ_Shut = 0x59cd50;
 auto D3D_RendererZ_BeginRender = 0x5b5120;
@@ -106,6 +107,7 @@ SafetyHookInline PlayerMoveG_Stop_Orig;
 SafetyHookInline PlayerMoveG_SetMyDynPosAndRot_Orig;
 SafetyHookInline CameraMoveG_Init_Orig;
 SafetyHookInline CameraEngineZ_GetCameraNode_Orig;
+SafetyHookInline P_WALLE_0x608ee0_Orig;
 SafetyHookInline D3D_RendererZ_Init_Orig;
 SafetyHookInline D3D_RendererZ_Shut_Orig;
 SafetyHookInline D3D_RendererZ_BeginRender_Orig;
@@ -347,6 +349,12 @@ SAFETYHOOK_THISCALL void CameraMoveG_Init_Hook(void* pThis)
 SAFETYHOOK_THISCALL void* CameraEngineZ_GetCameraNode_Hook(void* pThis)
 {
 	return CameraEngineZ_GetCameraNode_Orig.thiscall<void*>(pThis);
+}
+
+SAFETYHOOK_THISCALL uint32_t P_WALLE_0x608ee0_Hook(void* pThis)
+{
+	// draw tire tracks only if mario is not there
+	return (marioId < 0);
 }
 
 // 0x4198f0 PC, 0x4c6a8 Mac
@@ -747,6 +755,7 @@ void modMain()
 	PlayerMoveG_SetMyDynPosAndRot_Orig   = safetyhook::create_inline((void*)PlayerMoveG_SetMyDynPosAndRot, (void*)&PlayerMoveG_SetMyDynPosAndRot_Hook);
 	CameraMoveG_Init_Orig                = safetyhook::create_inline((void*)CameraMoveG_Init, (void*)&CameraMoveG_Init_Hook);
 	CameraEngineZ_GetCameraNode_Orig     = safetyhook::create_inline((void*)CameraEngineZ_GetCameraNode, (void*)&CameraEngineZ_GetCameraNode_Hook);
+	P_WALLE_0x608ee0_Orig                = safetyhook::create_inline((void*)P_WALLE_0x608ee0, (void*)&P_WALLE_0x608ee0_Hook);
 	CreaturesG_Init_Orig                 = safetyhook::create_inline((void*)CreaturesG_Init, (void*)&CreaturesG_Init_Hook);
 	CreaturesG_Sleep_Orig                = safetyhook::create_inline((void*)CreaturesG_Sleep, (void*)&CreaturesG_Sleep_Hook);
 	CreaturesG_WakeUp_Orig               = safetyhook::create_inline((void*)CreaturesG_WakeUp, (void*)&CreaturesG_WakeUp_Hook);
