@@ -260,7 +260,7 @@ SAFETYHOOK_THISCALL void PlayerG_Init_Hook(void* pThis)
 	// divide coordinates when converting from libsm64 to game
 	SM64Surface surfaces[2];
 	uint32_t surfaceCount = sizeof(surfaces) / sizeof(SM64Surface);
-	int size = 256 * MARIO_SCALE;
+	int size = 512 * MARIO_SCALE;
     int spawnX = x * MARIO_SCALE;
     int spawnY = y * MARIO_SCALE;
     int spawnZ = z * MARIO_SCALE;
@@ -272,13 +272,13 @@ SAFETYHOOK_THISCALL void PlayerG_Init_Hook(void* pThis)
 		surfaces[i].terrain = TERRAIN_STONE;
 	}
 
-	surfaces[0].vertices[0][0] = spawnX + size;	surfaces[0].vertices[0][1] = spawnY;	surfaces[0].vertices[0][2] = spawnZ+size/2;
-    surfaces[0].vertices[1][0] = spawnX - size;	surfaces[0].vertices[1][1] = spawnY;	surfaces[0].vertices[1][2] = spawnZ-size/2;
-    surfaces[0].vertices[2][0] = spawnX - size;	surfaces[0].vertices[2][1] = spawnY;	surfaces[0].vertices[2][2] = spawnZ+size/2;
+	surfaces[0].vertices[0][0] = spawnX+size/2;	surfaces[0].vertices[0][1] = spawnY;	surfaces[0].vertices[0][2] = spawnZ+size/2;
+    surfaces[0].vertices[1][0] = spawnX-size/2;	surfaces[0].vertices[1][1] = spawnY;	surfaces[0].vertices[1][2] = spawnZ-size/2;
+    surfaces[0].vertices[2][0] = spawnX-size/2;	surfaces[0].vertices[2][1] = spawnY;	surfaces[0].vertices[2][2] = spawnZ+size/2;
 
-    surfaces[1].vertices[0][0] = spawnX - size;	surfaces[1].vertices[0][1] = spawnY;	surfaces[1].vertices[0][2] = spawnZ-size/2;
-    surfaces[1].vertices[1][0] = spawnX + size;	surfaces[1].vertices[1][1] = spawnY;	surfaces[1].vertices[1][2] = spawnZ+size/2;
-    surfaces[1].vertices[2][0] = spawnX + size;	surfaces[1].vertices[2][1] = spawnY;	surfaces[1].vertices[2][2] = spawnZ-size/2;
+    surfaces[1].vertices[0][0] = spawnX-size/2;	surfaces[1].vertices[0][1] = spawnY;	surfaces[1].vertices[0][2] = spawnZ-size/2;
+    surfaces[1].vertices[1][0] = spawnX+size/2;	surfaces[1].vertices[1][1] = spawnY;	surfaces[1].vertices[1][2] = spawnZ+size/2;
+    surfaces[1].vertices[2][0] = spawnX+size/2;	surfaces[1].vertices[2][1] = spawnY;	surfaces[1].vertices[2][2] = spawnZ-size/2;
 
 	sm64_static_surfaces_load(surfaces, surfaceCount);
 
@@ -300,6 +300,10 @@ SAFETYHOOK_THISCALL void PlayerG_Init_Hook(void* pThis)
 
 	//CreaturesG_Sleep_Orig.thiscall<void>(pMainPlayer);
 	CreaturesG_Sleep_Orig.thiscall<void>(pThis);
+
+	void* pNode = HandleManagerZ_GetPtr_Orig.thiscall<void*>(HandleManagerZ, pMainPlayer + 0x54);
+	float* pNodeColor = (float*)(pNode + 0xfc);
+	pNodeColor[3] = 0.f;
 }
 
 // 0x64b530 PC, 0x15ac56 Mac
@@ -351,12 +355,12 @@ SAFETYHOOK_THISCALL void GameZ_Update_Hook(int* pThis, float dt)
 {
 	//printf("Game_Z::Update(): %x, dt=%f\n", pThis, dt);
 
+	void* pMainPlayer = ScriptManagerG_GetMainPlayer_Orig.thiscall<void*>(ScriptManagerG, 0);
 	if (marioId >= 0)
 	{
-		//float* pos = LodMoveZ_GetPos_Orig.thiscall<float*>(pPlayerMove, 0);
-
-		void* pMainPlayer = ScriptManagerG_GetMainPlayer_Orig.thiscall<void*>(ScriptManagerG, 0);
 		void* pPlayerMove = (pMainPlayer) ? HandleManagerZ_GetPtr_Orig.thiscall<void*>(HandleManagerZ, pMainPlayer + 0x70) : 0; // field 0x70 is BaseObject_Z
+
+		//float* pos = LodMoveZ_GetPos_Orig.thiscall<float*>(pPlayerMove, 0);
 
 		marioTimer += dt;
 		while (marioTimer > 1.f/30.f)
@@ -426,6 +430,7 @@ SAFETYHOOK_THISCALL void CreaturesG_WakeUp_Hook(void* pThis)
 	CreaturesG_WakeUp_Orig.thiscall<void>(pThis);
 }
 
+
 // 0x59c750 PC
 SAFETYHOOK_THISCALL uint32_t D3D_RendererZ_Init_Hook(int* pThis, int width, int height, int param_4, char param_5)
 {
@@ -491,7 +496,7 @@ SAFETYHOOK_THISCALL void D3D_RendererZ_EndRender_Hook(void* pThis, float param_2
 	}
 	else
 	{
-		char buf[128] = {0};
+		char buf[64] = {0};
 
 		pos[1] += 8;
 		sprintf(buf, "ID: %d", marioId);
