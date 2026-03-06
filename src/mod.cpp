@@ -265,8 +265,6 @@ SAFETYHOOK_THISCALL void PlayerG_Init_Hook(void* pThis)
 
 	// TODO: load level collision
 
-	// multiply coordinates when converting from game to libsm64
-	// divide coordinates when converting from libsm64 to game
 	SM64Surface surfaces[2];
 	uint32_t surfaceCount = sizeof(surfaces) / sizeof(SM64Surface);
 	int size = 512 * MARIO_SCALE;
@@ -387,9 +385,9 @@ SAFETYHOOK_THISCALL void MusicManagerG_SetMusicZone_Hook(void* pThis, uint32_t m
 	void* pPlayerMove = (pMainPlayer) ? HandleManagerZ_GetPtr_Orig.thiscall<void*>(HandleManagerZ, pMainPlayer + 0x70) : 0; // field 0x70 is BaseObject_Z
 
 	if (musicID >= 0x1000)
-		sm64_play_music(0, SEQ_LEVEL_GRASS, 0);
-	else
-		sm64_stop_background_music(SEQ_LEVEL_GRASS);
+		sm64_play_music(0, getConfig("rejectbot_music") | (getConfig("sm64_music_variation") ? SEQ_VARIATION : 0), 0);
+	else if (sm64_get_current_background_music() != 0xffff)
+		sm64_stop_background_music(sm64_get_current_background_music());
 
 	MusicManagerG_SetMusicZone_Orig.thiscall<void>(pThis, musicID, param_3);
 }

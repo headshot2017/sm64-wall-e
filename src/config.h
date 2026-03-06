@@ -1,10 +1,10 @@
 #ifndef CONFIG_H_INCLUDED
 #define CONFIG_H_INCLUDED
 
-#define CONFIG_FILENAME "../libsm64-wall-e.cfg"
+#define CONFIG_FILENAME "../sm64-wall-e.cfg"
 
 #include <string>
-#include <unordered_map>
+#include <map>
 
 struct ConfigElement
 {
@@ -12,7 +12,7 @@ struct ConfigElement
 	int value;
 };
 
-extern std::unordered_map<std::string, ConfigElement> config;
+extern std::map<std::string, ConfigElement> config;
 
 int getConfig(std::string value);
 void saveConfig();

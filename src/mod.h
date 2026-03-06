@@ -1,6 +1,8 @@
 #ifndef MOD_H_INCLUDED
 #define MOD_H_INCLUDED
 
+// multiply coordinates when converting from game to libsm64
+// divide coordinates when converting from libsm64 to game
 #define MARIO_SCALE 80.f
 
 void Message(const char* sometext);
