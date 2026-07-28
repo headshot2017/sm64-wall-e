@@ -61,9 +61,11 @@ auto ObjectMoveZ_GetScale = 0x433170;
 auto ObjectMoveZ_GetRot = 0x4331e0;
 auto LodMoveZ_SetPos = 0x4354b0;
 auto LodMoveZ_SetPosAndRot = 0x435680;
+auto LodMoveZ_UpdateCollision = 0x435db0;
 auto CreaturesMoveG_SetMyFuturePos = 0x5eef10;
 auto GameZ_Update = 0x438620;
 auto GameZ_GetFirstVp = 0x437dd0;
+auto WorldZ_LoadDone = 0x4bd760;
 auto CreaturesG_Init = 0x6970a0;
 auto CreaturesG_Sleep = 0x5ebb90;
 auto CreaturesG_WakeUp = 0x5ebbe0;
@@ -72,6 +74,7 @@ auto PlayerG_Suspend = 0x60aa40;
 auto PlayerG_Restore = 0x60aa80;
 auto PlayerMoveG_Destructor = 0x64b530;
 auto PlayerMoveG_Stop = 0x60ea00;
+auto PlayerMoveG_Update_SeadZone = 0x60f030;
 auto PlayerMoveG_SetMyDynPosAndRot = 0x60e390;
 auto PlayerMoveG_IsCurrentMusicForRejected = 0x60e020;
 auto PlayerMoveG_GetMusicForRejected = 0x60e0c0;
@@ -97,9 +100,11 @@ SafetyHookInline ObjectMoveZ_GetScale_Orig;
 SafetyHookInline ObjectMoveZ_GetRot_Orig;
 SafetyHookInline LodMoveZ_SetPos_Orig;
 SafetyHookInline LodMoveZ_SetPosAndRot_Orig;
+SafetyHookInline LodMoveZ_UpdateCollision_Orig;
 SafetyHookInline CreaturesMoveG_SetMyFuturePos_Orig;
 SafetyHookInline GameZ_Update_Orig;
 SafetyHookInline GameZ_GetFirstVp_Orig;
+SafetyHookInline WorldZ_LoadDone_Orig;
 SafetyHookInline CreaturesG_Init_Orig;
 SafetyHookInline CreaturesG_Sleep_Orig;
 SafetyHookInline CreaturesG_WakeUp_Orig;
@@ -108,6 +113,7 @@ SafetyHookInline PlayerG_Suspend_Orig;
 SafetyHookInline PlayerG_Restore_Orig;
 SafetyHookInline PlayerMoveG_Destructor_Orig;
 SafetyHookInline PlayerMoveG_Stop_Orig;
+SafetyHookInline PlayerMoveG_Update_SeadZone_Orig;
 SafetyHookInline PlayerMoveG_SetMyDynPosAndRot_Orig;
 SafetyHookInline PlayerMoveG_IsCurrentMusicForRejected_Orig;
 SafetyHookInline PlayerMoveG_GetMusicForRejected_Orig;
@@ -128,6 +134,14 @@ safetyhook::MidHook D3D_RendererZ_PushProjMatrix_MidOrig;
 safetyhook::MidHook D3D_RendererZ_PushViewMatrix_MidOrig;
 SAFETYHOOK_STDCALL HRESULT D3D_Clear_Hook(LPDIRECT3DDEVICE9, DWORD, const D3DRECT*, DWORD, D3DCOLOR, float, DWORD);
 
+void* gData = (void*)0x3f0018;
+void* ConsoleZ = 0;
+void* PlayerG = 0;
+void* ScriptManagerG = 0;
+void* HandleManagerZ = 0;
+void* GameZ_Vp = 0;
+void* GameZ = 0;
+void* CameraMoveG = 0;
 
 SAFETYHOOK_THISCALL void RegisterCmdHook(void* pThis, const char* cmd, void* param_3)
 {
@@ -135,7 +149,6 @@ SAFETYHOOK_THISCALL void RegisterCmdHook(void* pThis, const char* cmd, void* par
 	RegisterCmdOrig.thiscall<void>(pThis, cmd, param_3);
 }
 
-void* ConsoleZ;
 SAFETYHOOK_THISCALL bool RunCmdHook(void* pThis, const char* cmd, void* unknown1)
 {
 	ConsoleZ = pThis;
@@ -149,7 +162,6 @@ SAFETYHOOK_THISCALL bool RunCmdHook(void* pThis, const char* cmd, void* unknown1
 	return res;
 }
 
-void* ScriptManagerG = 0;
 // 0x6b3c70 PC, 0x198294 Mac
 SAFETYHOOK_THISCALL void ScriptManagerG_Init_Hook(void* pThis)
 {
@@ -165,8 +177,6 @@ SAFETYHOOK_THISCALL void* ScriptManagerG_GetMainPlayer_Hook(void* pThis, uint32_
 	return pPlayer;
 }
 
-void* HandleManagerZ = 0;
-void* gData = (void*)0x3f0018;
 // 0x586a70 PC
 SAFETYHOOK_THISCALL void* HandleManagerZ_GetPtr_Hook(void* pThis, void* param_2)
 {
@@ -209,20 +219,32 @@ SAFETYHOOK_THISCALL void LodMoveZ_SetPosAndRot_Hook(void* pThis, float* pos, flo
 	LodMoveZ_SetPosAndRot_Orig.thiscall<void>(pThis, pos, quat, param_4);
 }
 
+SAFETYHOOK_THISCALL void LodMoveZ_UpdateCollision_Hook(void* pThis, void* SeadZoneZ, float* float3_1, float* float3_2, float* float3_3, float* float3_4, float param_6, long param_7)
+{
+	if (pThis == ScriptManagerG_GetMainPlayer_Orig.thiscall<void*>(ScriptManagerG, 0))
+	{
+		printf("LodMoveZ::UpdateCollision(): this is player (pThis=%x)\n", pThis);
+	}
+	LodMoveZ_UpdateCollision_Orig.thiscall<void>(pThis, SeadZoneZ, float3_1, float3_2, float3_3, float3_4, param_6, param_7);
+}
+
 // 0x5eef10 PC
 SAFETYHOOK_THISCALL void CreaturesMoveG_SetMyFuturePos_Hook(void* pThis, float* pos, bool param_3)
 {
 	CreaturesMoveG_SetMyFuturePos_Orig.thiscall<void>(pThis, pos, param_3);
 }
 
-
-
-void* GameZ_Vp = 0;
 // 0x437dd0 PC
 SAFETYHOOK_THISCALL void* GameZ_GetFirstVp_Hook(void* pThis)
 {
 	GameZ_Vp = pThis;
 	return GameZ_GetFirstVp_Orig.thiscall<void*>(pThis);
+}
+
+SAFETYHOOK_THISCALL void WorldZ_LoadDone_Hook(void* pThis)
+{
+	printf("World_Z::LoadDone(): %x\n", pThis);
+	WorldZ_LoadDone_Orig.thiscall<void>(pThis);
 }
 
 // 0x60aa40 PC
@@ -239,7 +261,6 @@ SAFETYHOOK_THISCALL void PlayerG_Restore_Hook(void* pThis)
 	PlayerG_Restore_Orig.thiscall<void>(pThis);
 }
 
-void* PlayerG = 0;
 // 0x69b4a0 PC, 0x15ce40 Mac
 SAFETYHOOK_THISCALL void PlayerG_Init_Hook(void* pThis)
 {
@@ -308,9 +329,24 @@ SAFETYHOOK_THISCALL void PlayerG_Init_Hook(void* pThis)
 	//CreaturesG_Sleep_Orig.thiscall<void>(pMainPlayer);
 	CreaturesG_Sleep_Orig.thiscall<void>(pThis);
 
+	// make default player invisible
 	void* pNode = HandleManagerZ_GetPtr_Orig.thiscall<void*>(HandleManagerZ, pMainPlayer + 0x54);
 	float* pNodeColor = (float*)(pNode + 0xfc);
 	pNodeColor[3] = 0.f;
+
+	// NOTE: SeadZone_Z has World_Z in 0x2c: (*(World_Z **)(param_1 + 0x2c)
+	// get it from the other PlayerMove_G::Update() function that takes SeadZone_Z as a param
+
+	//void* pWorld_Z = HandleManagerZ_GetPtr_Orig.thiscall<void*>(HandleManagerZ, GameZ + 0xc); // 0xc is World_ZHdl
+	//printf("World_Z = %x, has %d Node_ZHdl's\n", pWorld_Z, (int)(*(uint32_t *)(pWorld_Z + 0xdc) >> 0xe));
+	/*
+	for (iVar16 = 0; iVar16 < (int)(*(uint *)(this + 0xdc) >> 0xe); iVar16 = iVar16 + 1)
+	{
+		pNVar13 = (Node_Z *)HandleManager_Z::GetPtr(
+			HandleManagerZ, (BaseObject_ZHdl *)(*(int *)(this + 0xe0) + iVar16 * 4)
+		);
+	}
+	*/
 }
 
 // 0x64b530 PC, 0x15ac56 Mac
@@ -336,6 +372,21 @@ SAFETYHOOK_THISCALL void PlayerMoveG_Stop_Hook(void* pThis)
 	PlayerMoveG_Stop_Orig.thiscall<void>(pThis);
 }
 
+SAFETYHOOK_THISCALL void PlayerMoveG_Update_SeadZone_Hook(void* pThis, void* pSeadZone, float* float3_1, float* float3_2, float* float3_3, float param_5, long param_6)
+{
+	printf("PlayerMove_G::Update() (SeadZone_Z): %x, %x, {%.3f, %.3f, %.3f}, {%.3f, %.3f, %.3f}, {%.3f, %.3f, %.3f}, %.3f, %d\n", pThis, pSeadZone, float3_1[0], float3_1[1], float3_1[2], float3_2[0], float3_2[1], float3_2[2], float3_3[0], float3_3[1], float3_3[2], param_5, param_6);
+
+	/*
+	SeadHandle_Z::Load((SeadHandle_Z *)(this + 0x44),param_1);
+	SeadHandle_Z::Load((SeadHandle_Z *)(this + 0x84),param_1);
+	*/
+	//void* pWorldZ = *(void **)(pSeadZone + 0x2c);
+	//printf("pWorldZ = %x, has %d Node_ZHdl's\n", pWorldZ, (int)(*(uint32_t *)(pWorldZ + 0xdc) >> 0xe));
+	printf("pSeadZone has %d / %d nodes\n", *(int *)(pSeadZone + 0x1c), *(int *)(pSeadZone + 0x20));
+
+	PlayerMoveG_Update_SeadZone_Orig.thiscall<void>(pThis, pSeadZone, float3_1, float3_2, float3_3, param_5, param_6);
+}
+
 // 0x60e390 PC
 SAFETYHOOK_THISCALL void PlayerMoveG_SetMyDynPosAndRot_Hook(void* pThis, float* pos, float* quat, bool param_4, bool param_5, bool param_6)
 {
@@ -356,7 +407,6 @@ SAFETYHOOK_THISCALL uint32_t PlayerMoveG_GetMusicForRejected_Hook(void* pThis)
 	return PlayerMoveG_GetMusicForRejected_Orig.thiscall<uint32_t>(pThis) + (marioId >= 0 ? 0x1000 : 0);
 }
 
-void* CameraMoveG = 0;
 // 0x5e2f10 PC
 SAFETYHOOK_THISCALL void CameraMoveG_Init_Hook(void* pThis)
 {
@@ -394,9 +444,10 @@ SAFETYHOOK_THISCALL void MusicManagerG_SetMusicZone_Hook(void* pThis, uint32_t m
 
 // 0x4198f0 PC, 0x4c6a8 Mac
 float quat[4] = {0};
-SAFETYHOOK_THISCALL void GameZ_Update_Hook(int* pThis, float dt)
+SAFETYHOOK_THISCALL void GameZ_Update_Hook(void* pThis, float dt)
 {
 	//printf("Game_Z::Update(): %x, dt=%f\n", pThis, dt);
+	GameZ = pThis;
 
 	void* pMainPlayer = ScriptManagerG_GetMainPlayer_Orig.thiscall<void*>(ScriptManagerG, 0);
 	if (marioId >= 0)
@@ -472,7 +523,6 @@ SAFETYHOOK_THISCALL void CreaturesG_WakeUp_Hook(void* pThis)
 	printf("Creatures_G::WakeUp(): %x\n", pThis);
 	CreaturesG_WakeUp_Orig.thiscall<void>(pThis);
 }
-
 
 // 0x59c750 PC
 SAFETYHOOK_THISCALL uint32_t D3D_RendererZ_Init_Hook(int* pThis, int width, int height, int param_4, char param_5)
@@ -779,14 +829,17 @@ void modMain()
 	ObjectMoveZ_GetRot_Orig                    = safetyhook::create_inline((void*)ObjectMoveZ_GetRot, (void*)&ObjectMoveZ_GetRot_Hook);
 	LodMoveZ_SetPos_Orig                       = safetyhook::create_inline((void*)LodMoveZ_SetPos, (void*)&LodMoveZ_SetPos_Hook);
 	LodMoveZ_SetPosAndRot_Orig                 = safetyhook::create_inline((void*)LodMoveZ_SetPosAndRot, (void*)&LodMoveZ_SetPosAndRot_Hook);
+	LodMoveZ_UpdateCollision_Orig              = safetyhook::create_inline((void*)LodMoveZ_UpdateCollision, (void*)&LodMoveZ_UpdateCollision_Hook);
 	CreaturesMoveG_SetMyFuturePos_Orig         = safetyhook::create_inline((void*)CreaturesMoveG_SetMyFuturePos, (void*)&CreaturesMoveG_SetMyFuturePos_Hook);
-	GameZ_GetFirstVp_Orig                      = safetyhook::create_inline((void*)GameZ_GetFirstVp, (void*)&GameZ_GetFirstVp_Hook);
 	GameZ_Update_Orig                          = safetyhook::create_inline((void*)GameZ_Update, (void*)&GameZ_Update_Hook);
+	GameZ_GetFirstVp_Orig                      = safetyhook::create_inline((void*)GameZ_GetFirstVp, (void*)&GameZ_GetFirstVp_Hook);
+	WorldZ_LoadDone_Orig                       = safetyhook::create_inline((void*)WorldZ_LoadDone, (void*)&WorldZ_LoadDone_Hook);
 	PlayerG_Init_Orig                          = safetyhook::create_inline((void*)PlayerG_Init, (void*)&PlayerG_Init_Hook);
 	PlayerG_Suspend_Orig                       = safetyhook::create_inline((void*)PlayerG_Suspend, (void*)&PlayerG_Suspend_Hook);
 	PlayerG_Restore_Orig                       = safetyhook::create_inline((void*)PlayerG_Restore, (void*)&PlayerG_Restore_Hook);
 	PlayerMoveG_Destructor_Orig                = safetyhook::create_inline((void*)PlayerMoveG_Destructor, (void*)&PlayerMoveG_Destructor_Hook);
 	PlayerMoveG_Stop_Orig                      = safetyhook::create_inline((void*)PlayerMoveG_Stop, (void*)&PlayerMoveG_Stop_Hook);
+	PlayerMoveG_Update_SeadZone_Orig           = safetyhook::create_inline((void*)PlayerMoveG_Update_SeadZone, (void*)&PlayerMoveG_Update_SeadZone_Hook);
 	PlayerMoveG_SetMyDynPosAndRot_Orig         = safetyhook::create_inline((void*)PlayerMoveG_SetMyDynPosAndRot, (void*)&PlayerMoveG_SetMyDynPosAndRot_Hook);
 	PlayerMoveG_IsCurrentMusicForRejected_Orig = safetyhook::create_inline((void*)PlayerMoveG_IsCurrentMusicForRejected, (void*)&PlayerMoveG_IsCurrentMusicForRejected_Hook);
 	PlayerMoveG_GetMusicForRejected_Orig       = safetyhook::create_inline((void*)PlayerMoveG_GetMusicForRejected, (void*)&PlayerMoveG_GetMusicForRejected_Hook);
