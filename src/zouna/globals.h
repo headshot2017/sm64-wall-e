@@ -40,4 +40,6 @@ struct Globals
     void* XRamMgr;
 };
 
+extern Globals* gData;
+
 #endif // GLOBALS_H_INCLUDED
