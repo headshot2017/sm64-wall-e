@@ -20,6 +20,7 @@ extern "C" {
 #include "config.h"
 #include "marioEffect.h"
 #include "quatmath.h"
+#include "zouna/utils.h"
 #include "zouna/globals.h"
 
 #define D3DFVF_WALLEVERTEX (D3DFVF_XYZ | D3DFVF_NORMAL | D3DFVF_DIFFUSE | D3DFVF_TEX1)
@@ -46,6 +47,8 @@ static SM64MarioGeometryBuffers marioGeometry = {0};
 LPDIRECT3DDEVICE9 d3d9Device = 0;
 LPDIRECT3DTEXTURE9 marioTextureD3D9 = 0;
 WALLEVERTEX* marioVerticesP = 0;
+WALLEVERTEX* debugVerticesP = 0;
+static uint32_t debugVerticesSize = 0;
 LPD3DXEFFECT marioEffect = 0;
 float projMatrix[16] = {0};
 float viewMatrix[16] = {0};
@@ -55,8 +58,16 @@ static std::vector<SM64Surface> marioStaticSurfaces;
 
 auto RegisterCmd = 0x4763b0;
 auto RunCmd = 0x476580;
+auto ClassManagerZ_RegisterClass = 0x403310;
+auto ClassManagerZ_GetClassName = 0x403560;
+auto NameZ_GetID = 0x4285b0;
 auto ScriptManagerG_GetMainPlayer = 0x6b3740;
 auto HandleManagerZ_GetPtr = 0x586a70;
+auto MeshPcZ_Unk_597c30 = 0x597c30;
+auto MeshPcZ_Draw = 0x5b68c0;
+auto SurfacePcZ_Draw = 0x5b74e0;
+auto SurfaceZ_GetCollisionPtr = 0x4fcf80;
+auto NodeZ_AfterEndLoad = 0x4beca0;
 auto LodMoveZ_GetPos = 0x435440;
 auto ObjectMoveZ_GetScale = 0x433170;
 auto ObjectMoveZ_GetRot = 0x4331e0;
@@ -91,8 +102,16 @@ auto ClearZBuffer = 0x58ffb0;
 auto SurfaceZ_Load = 0x4d3450;
 SafetyHookInline RegisterCmdOrig;
 SafetyHookInline RunCmdOrig;
+SafetyHookInline ClassManagerZ_RegisterClass_Orig;
+SafetyHookInline ClassManagerZ_GetClassName_Orig;
+SafetyHookInline NameZ_GetID_Orig;
 SafetyHookInline ScriptManagerG_GetMainPlayer_Orig;
 SafetyHookInline HandleManagerZ_GetPtr_Orig;
+SafetyHookInline MeshPcZ_Unk_597c30_Orig;
+SafetyHookInline MeshPcZ_Draw_Orig;
+SafetyHookInline SurfacePcZ_Draw_Orig;
+SafetyHookInline SurfaceZ_GetCollisionPtr_Orig;
+SafetyHookInline NodeZ_AfterEndLoad_Orig;
 SafetyHookInline LodMoveZ_GetPos_Orig;
 SafetyHookInline ObjectMoveZ_GetScale_Orig;
 SafetyHookInline ObjectMoveZ_GetRot_Orig;
@@ -130,7 +149,6 @@ safetyhook::MidHook D3D_RendererZ_PushProjMatrix_MidOrig;
 safetyhook::MidHook D3D_RendererZ_PushViewMatrix_MidOrig;
 SAFETYHOOK_STDCALL HRESULT D3D_Clear_Hook(LPDIRECT3DDEVICE9, DWORD, const D3DRECT*, DWORD, D3DCOLOR, float, DWORD);
 
-Globals* gData = (Globals*)0x92e734;
 void* PlayerG = 0;
 void* GameZ = 0;
 void* CameraMoveG = 0;
@@ -146,11 +164,32 @@ SAFETYHOOK_THISCALL bool RunCmdHook(void* pThis, const char* cmd, void* unknown1
 	//bool dontLog = (strncmp(cmd, "MENU", 4) == 0);
 	bool dontLog = true;
 	if (!dontLog)
-		printf("cmd='%s' ", cmd);
+		printf("cmd='%s'", cmd);
 	bool res = RunCmdOrig.thiscall<bool>(pThis, cmd, unknown1);
 	if (!dontLog)
 		printf("result: %d\n", res);
 	return res;
+}
+
+// 0x403310 PC
+SAFETYHOOK_THISCALL void* ClassManagerZ_RegisterClass_Hook(void* pThis, const char* pName, const char* pParentName, void* pNewObjectCB)
+{
+	//printf("ClassManager_Z::RegisterClass(): %x '%s' '%s' %x\n", pThis, pName, pParentName, pNewObjectCB);
+	return ClassManagerZ_RegisterClass_Orig.thiscall<void*>(pThis, pName, pParentName, pNewObjectCB);
+}
+
+// 0x403560 PC
+SAFETYHOOK_THISCALL void* ClassManagerZ_GetClassName_Hook(void* pThis, void* pBaseObjectHdl)
+{
+	return ClassManagerZ_GetClassName_Orig.thiscall<void*>(pThis, pBaseObjectHdl);
+}
+
+// 0x4285b0 PC
+SAFETYHOOK_FASTCALL uint32_t NameZ_GetID_Hook(const char* pName, uint32_t ContinueCRC)
+{
+	uint32_t result = NameZ_GetID_Orig.fastcall<uint32_t>(pName, ContinueCRC);
+	//printf("Name_Z::GetID(): '%s' %d, result=%d\n", pName, ContinueCRC, result);
+	return result;
 }
 
 // 0x6b3740 PC
@@ -165,6 +204,181 @@ SAFETYHOOK_THISCALL void* HandleManagerZ_GetPtr_Hook(void* pThis, void* param_2)
 {
 	void* result = HandleManagerZ_GetPtr_Orig.thiscall<void*>(pThis, param_2);
 	return result;
+}
+
+//SAFETYHOOK_THISCALL void MeshPcZ_Unk_597c30_Hook(void* pThis, BigFileRsc_Z* param_1)
+SAFETYHOOK_THISCALL void MeshPcZ_Unk_597c30_Hook(void* pThis, void* param_1)
+{
+	printf("MeshPc_Z::0x597c30(): %x %x\n", pThis, param_1);
+
+	MeshPcZ_Unk_597c30_Orig.thiscall<void>(pThis, param_1);
+	//printf("%d %d %d\n", DynArrayZ_GetSize(pThis+0x78), DynArrayZ_GetSize(pThis+0x80), DynArrayZ_GetSize(pThis+0x88));
+}
+
+SAFETYHOOK_THISCALL void MeshPcZ_Draw_Hook(void* pThis, void* param_1, void* param_2)
+{
+	//printf("MeshPc_Z::Draw(): %x\n", pThis);
+
+	MeshPcZ_Draw_Orig.thiscall<void>(pThis, param_1, param_2);
+}
+
+SAFETYHOOK_THISCALL void SurfacePcZ_Draw_Hook(void* pThis, void* param_1, void* param_2)
+{
+	//printf("MeshPc_Z::Draw(): %x\n", pThis);
+
+	SurfacePcZ_Draw_Orig.thiscall<void>(pThis, param_1, param_2);
+}
+
+SAFETYHOOK_FASTCALL Vec4f* SurfaceZ_GetCollisionPtr_Hook(void* a, void* b, void* c, void* d, void* e, void* f, void* g)
+{
+	printf("Surface_Z::GetCollisionPtr(): %x %x %x %x %x %x %x\n", a, b, c, d, e, f, g);
+	return SurfaceZ_GetCollisionPtr_Orig.fastcall<Vec4f*>(a, b, c, d, e, f, g);
+}
+
+// 0x4beca0 PC
+SAFETYHOOK_THISCALL void NodeZ_AfterEndLoad_Hook(void* pThis)
+{
+	printf("Node_Z::AfterEndLoad(): %x\n", pThis);
+	NodeZ_AfterEndLoad_Orig.thiscall<void>(pThis);
+
+	void* pObjectZ = *(void**)(pThis + 0x130);
+	printf("pObjectZ=%x", pObjectZ);
+	if (pObjectZ)
+	{
+		uint16_t objectType = *(uint16_t *)(pObjectZ + 0x70);
+		printf(" objectType=%d\n", objectType);
+		if (objectType == 1)
+		{
+			uint32_t nodeFlag = *(uint32_t *)(pThis + 0xd8);
+			printf("nodeFlag = %x\n", nodeFlag);
+			if (nodeFlag & (1 << 16) || nodeFlag & (1 << 7) /*|| nodeFlag & (1 << 8)*/ || nodeFlag == (1 << 27))
+			{
+				printf("skip this node...\n");
+				return;
+			}
+
+			//uint32_t PatchTabSize = DynArrayZ_GetSize(pObjectZ + 0xa0);
+			Vec3f worldPos = *(*(Vec3f **)(pThis + 0x78) + 0x30);
+			Vec3f pos = *(Vec3f *)(pThis + 0xcc);
+			float scale = *(float *)(pThis + 0xec);
+			//float* quat = (float *)(pThis + 0xdc);
+			Quat* quat = (Quat *)(pThis + 0xbc);
+			float angle;
+			Vec3f axis = GetAxisAngle(&angle, quat);
+			axis.x *= 0;
+			axis.y *= 0;
+			axis.z *= 0;
+			//ToEuler(quat, (float*)&angle);
+			printf("Surface_Z, pos=%.3f %.3f %.3f scale=%.3f angle=%.3f %.3f %.3f\n", pos.x, pos.y, pos.z, scale, axis.x, axis.y, axis.z);
+
+			worldPos.x *= MARIO_SCALE;
+			worldPos.y *= MARIO_SCALE;
+			worldPos.z *= MARIO_SCALE;
+			pos.x *= MARIO_SCALE;
+			pos.y *= MARIO_SCALE;
+			pos.z *= MARIO_SCALE;
+
+			void* pParent = *(void**)(pThis + 0x138);
+			printf("going through parents...\n");
+			while (pParent)
+			{
+				Vec3f parentWorldPos = *(*(Vec3f **)(pParent + 0x78) + 0x30);
+				Vec3f parentPos = *(Vec3f *)(pParent + 0xcc);
+				float parentScale = *(float *)(pParent + 0xec);
+				//quat = (float *)(pParent + 0xdc);
+				quat = (Quat *)(pParent + 0xbc);
+
+				//worldPos.x += parentWorldPos.x * MARIO_SCALE;
+				//worldPos.y += parentWorldPos.y * MARIO_SCALE;
+				//worldPos.z += parentWorldPos.z * MARIO_SCALE;
+				//pos.x += parentPos.x * MARIO_SCALE;
+				//pos.y += parentPos.y * MARIO_SCALE;
+				//pos.z += parentPos.z * MARIO_SCALE;
+				Vec3f parentAxis = GetAxisAngle(&angle, quat);
+				//axis.x += parentAxis.x * angle;
+				//axis.y += parentAxis.y * angle;
+				//axis.z += parentAxis.z * angle;
+				scale *= parentScale;
+				printf("parent %x, next parent %x, parentPos=%.3f %.3f %.3f scale=%.3f parentAngle=%.3f %.3f %.3f\n", pParent, *(void**)(pParent + 0x138), parentPos.x, parentPos.y, parentPos.z, scale, parentAxis.x*angle, parentAxis.y*angle, parentAxis.z*angle);
+				pParent = *(void**)(pParent + 0x138);
+				//pParent = 0;
+			}
+
+			GetSurfaceVertices(pObjectZ, pos, axis, marioStaticSurfaces);
+		}
+		else if (objectType == 6)
+		{
+			/*
+			const char* classNames[] = {
+				"Mesh_Z",
+				"Skin_Z",
+			};
+			for (int i=0; i<5; i++)
+				printf("%s: %x %d\n", classNames[i], NameZ_GetID_Hook(classNames[i], 0), NameZ_GetID_Hook(classNames[i], 0));
+			*/
+
+			//void* pBaseObjectHdl = BaseObjectZ_GetHandle(pThis);
+			//uint32_t className = *(uint32_t*)(ClassManagerZ_GetClassName_Hook(gData->ClassMgr, pBaseObjectHdl));
+
+			// find Mesh_Z objects and load geometry
+			/*
+			void* pObjectHdlDA = pObjectZ + 0xa4;
+			printf("DynArray_Z size=%d\n", DynArrayZ_GetSize(pObjectHdlDA));
+			for (uint32_t i=0; i<DynArrayZ_GetSize(pObjectHdlDA); i++)
+			{
+				void* pObjectHdl = DynArrayZ_GetItem(pObjectHdlDA, i);
+				uint32_t className = *(uint32_t*)(ClassManagerZ_GetClassName_Hook(gData->ClassMgr, pObjectHdl));
+				//printf("Lod_Z m_Objects[%d] size=%d: %x, pObjectHdl=%x, className=%x\n", i, DynArrayZ_GetSize(pObjectHdlDA), DynArrayZ_GetItem(pObjectHdlDA, i), pObjectHdl, className);
+
+				if (className != NameZ_GetID_Hook("Mesh_Z", 0)) continue;
+				printf("Lod_Z m_Objects[%d] is Mesh_Z\n", i);
+				void* pMesh = HandleManagerZ_GetPtr_Hook(gData->ClassMgr, pObjectHdl);
+
+				void* pStripsArray = pMesh + 0xa0;
+				printf("Mesh_Z m_Strips size: %d\n", DynArrayZ_GetSize(pStripsArray));
+			}
+			*/
+
+			/*
+			void* pNodeParent = *(void**)(pThis + 0x138);
+			void* pNodeHeadSon = *(void**)(pThis + 0x13c);
+			printf("pNodeParent=%x, pNodeHeadSon=%x\n", pNodeParent, pNodeHeadSon);
+			if (pNodeParent)
+			{
+				void* pObject1Z = *(void**)(pNodeParent + 0x130);
+				if (pObject1Z)
+				{
+					printf("parent object=%x\n", pObject1Z);
+					int objectType = *(int *)(pObject1Z + 0x70);
+					printf("parent objectType=%d\n", objectType);
+				}
+			}
+			if (pNodeHeadSon)
+			{
+				void* pObject1Z = *(void**)(pNodeHeadSon + 0x130);
+				if (pObject1Z)
+				{
+					printf("headson object=%x\n", pObject1Z);
+					int objectType = *(int *)(pObject1Z + 0x70);
+					printf("headson objectType=%d\n", objectType);
+				}
+			}
+			*/
+			//void* pStripsArray = pObjectZ + 0xa0;
+			/*
+			void* pStripsArray = (pObjectZ + 0xb0);
+			printf("Mesh_Z specific array size: %d p=%x\n", DynArrayZ_GetSize(pStripsArray), pStripsArray);
+			for (uint32_t i=0; i<DynArrayZ_GetSize(pStripsArray); i++)
+			{
+				void* item = DynArrayZ_GetItem(pStripsArray, i);
+				printf("%d: %x %d %f\n", i, *(uint32_t*)item, *(uint32_t*)item, *(float*)item);
+			}
+			*/
+
+			//float* pfVar13 = *(float **)(pThis + 0x78);
+		}
+	}
+	printf("\n");
 }
 
 // 0x435440 PC
@@ -209,9 +423,65 @@ SAFETYHOOK_THISCALL void CreaturesMoveG_SetMyFuturePos_Hook(void* pThis, float* 
 
 SAFETYHOOK_THISCALL void WorldZ_LoadDone_Hook(void* pThis)
 {
-	printf("World_Z::LoadDone(): %x\n", pThis);
-	sm64_static_surfaces_load(marioStaticSurfaces.data(), marioStaticSurfaces.size());
-	marioStaticSurfaces.clear();
+	printf("World_Z::LoadDone(): %x (%d total surfaces)\n", pThis, marioStaticSurfaces.size());
+
+	if (debugVerticesP)
+	{
+		delete[] debugVerticesP;
+		debugVerticesP = 0;
+		debugVerticesSize = 0;
+	}
+
+	if (!marioStaticSurfaces.empty())
+	{
+		sm64_static_surfaces_load(marioStaticSurfaces.data(), marioStaticSurfaces.size());
+
+		debugVerticesSize = marioStaticSurfaces.size();
+		debugVerticesP = new WALLEVERTEX[debugVerticesSize*3];
+		for (uint32_t i=0; i<marioStaticSurfaces.size(); i++)
+		{
+			SM64Surface& surf = marioStaticSurfaces[i];
+
+			float x1 = debugVerticesP[i*3+0].x = surf.vertices[0][0];
+			float y1 = debugVerticesP[i*3+0].y = surf.vertices[0][1];
+			float z1 = debugVerticesP[i*3+0].z = surf.vertices[0][2];
+			float x2 = debugVerticesP[i*3+1].x = surf.vertices[1][0];
+			float y2 = debugVerticesP[i*3+1].y = surf.vertices[1][1];
+			float z2 = debugVerticesP[i*3+1].z = surf.vertices[1][2];
+			float x3 = debugVerticesP[i*3+2].x = surf.vertices[2][0];
+			float y3 = debugVerticesP[i*3+2].y = surf.vertices[2][1];
+			float z3 = debugVerticesP[i*3+2].z = surf.vertices[2][2];
+
+			float nx = (y2 - y1) * (z3 - z2) - (z2 - z1) * (y3 - y2);
+			float ny = (z2 - z1) * (x3 - x2) - (x2 - x1) * (z3 - z2);
+			float nz = (x2 - x1) * (y3 - y2) - (y2 - y1) * (x3 - x2);
+			float mag = sqrtf(nx * nx + ny * ny + nz * nz);
+			nx /= mag;
+			ny /= mag;
+			nz /= mag;
+
+			debugVerticesP[i*3+0].nx = nx;
+			debugVerticesP[i*3+0].ny = ny;
+			debugVerticesP[i*3+0].nz = nz;
+			debugVerticesP[i*3+1].nx = nx;
+			debugVerticesP[i*3+1].ny = ny;
+			debugVerticesP[i*3+1].nz = nz;
+			debugVerticesP[i*3+2].nx = nx;
+			debugVerticesP[i*3+2].ny = ny;
+			debugVerticesP[i*3+2].nz = nz;
+
+			for (int j=0; j<3; j++)
+				debugVerticesP[i*3+j].color = D3DCOLOR_ARGB(
+					128,
+					(UINT)(0.75f * (.5f+.5f*debugVerticesP[i*3+j].nx) * 255),
+					(UINT)(0.75f * (.5f+.5f*debugVerticesP[i*3+j].ny) * 255),
+					(UINT)(0.75f * (.5f+.5f*debugVerticesP[i*3+j].nz) * 255)
+				);
+		}
+
+		marioStaticSurfaces.clear();
+	}
+
 	WorldZ_LoadDone_Orig.thiscall<void>(pThis);
 }
 
@@ -236,13 +506,42 @@ SAFETYHOOK_THISCALL void PlayerG_Init_Hook(void* pThis)
 	PlayerG_Init_Orig.thiscall<void>(pThis);
 	PlayerG = pThis;
 
-	void* pBaseObjectHdl = pThis + 8;
-
 	//return;
 
 	void* pMainPlayer = ScriptManagerG_GetMainPlayer_Orig.thiscall<void*>(gData->ScriptMgr, 0);
 	if (!pMainPlayer)
 		return;
+
+	const char* classNames[] = {
+		"P_W_BLUE",
+		"P_W_BUTT",
+		"P_WA_EXT",
+		"P_WALLE",
+		"P_WCLEAN",
+		"P_WLIGHT",
+		"P_WOFI",
+		"Player_G",
+		"Friends_G",
+		"Creatures_G",
+		"BaseAgent_G",
+		"LodAgent_Z",
+		"Throwable_Z",
+		"MovingAgent_Z",
+		"AnimatedAgent_Z",
+		"AnimatedMsgAgent_Z",
+		"Agent_Z",
+		"ABC_Agent",
+		"BaseObject_Z",
+	};
+	for (int i=0; i<19; i++)
+		printf("%s: %x %d\n", classNames[i], NameZ_GetID_Hook(classNames[i], 0), NameZ_GetID_Hook(classNames[i], 0));
+
+	void* pBaseObjectHdl = BaseObjectZ_GetHandle(pMainPlayer);
+	void* pTest = HandleManagerZ_GetPtr_Orig.thiscall<void*>(gData->ClassMgr, pBaseObjectHdl);
+	//printf("pThis=%x pBaseObjectHdl=%x pTest=%x\n", pThis, pBaseObjectHdl, pTest);
+	void* pName = ClassManagerZ_GetClassName_Hook(gData->ClassMgr, pBaseObjectHdl);
+	for (int i=0; i<8; i+=4)
+		printf("%d: pBaseObjectHdl pName=%x %d, %x %d\n", i, pName+i, pName+i, *(uint32_t*)(pName+i), *(uint32_t*)(pName+i));
 
 	void* pPlayerMove = HandleManagerZ_GetPtr_Orig.thiscall<void*>(gData->ClassMgr, pMainPlayer + 0x70); // field 0x70 is PlayerMove_G
 	if (!pPlayerMove)
@@ -280,7 +579,7 @@ SAFETYHOOK_THISCALL void PlayerG_Init_Hook(void* pThis)
     surfaces[1].vertices[1][0] = spawnX+size/2;	surfaces[1].vertices[1][1] = spawnY;	surfaces[1].vertices[1][2] = spawnZ+size/2;
     surfaces[1].vertices[2][0] = spawnX+size/2;	surfaces[1].vertices[2][1] = spawnY;	surfaces[1].vertices[2][2] = spawnZ-size/2;
 
-	sm64_static_surfaces_load(surfaces, surfaceCount);
+	//sm64_static_surfaces_load(surfaces, surfaceCount);
 
 	if (marioId >= 0)
 	{
@@ -653,11 +952,14 @@ SAFETYHOOK_STDCALL HRESULT D3D_Clear_Hook(LPDIRECT3DDEVICE9 pThis, DWORD Count, 
 
 SAFETYHOOK_THISCALL void SurfaceZ_Load_Hook(void* pThis, void** data)
 {
+	printf("Surface_Z::Load(): %x\n", pThis);
 	SurfaceZ_Load_Orig.thiscall<void>(pThis, data);
 
 	int offset = 0x78;
-	uint32_t DynArrayZ_Size = *(uint32_t *)(pThis + offset) >> 0xe;
-	void* DynArrayZ_Data = *(void **)(pThis + offset+4);
+	void* pDynArray = (pThis + offset);
+	uint32_t DynArrayZ_Size = DynArrayZ_GetSize(pDynArray);
+	//uint32_t DynArrayZ_Size = *(uint32_t *)(pThis + offset) >> 0xe;
+	//void* DynArrayZ_Data = *(void **)(pThis + offset+4);
 	//printf("Surface_Z::Load(): %x %x, chosen DynArray_Z size: %d\n", pThis, data, DynArrayZ_Size);
 	for (uint32_t i=0; i<DynArrayZ_Size; i++)
 	{
@@ -671,61 +973,93 @@ SAFETYHOOK_THISCALL void SurfaceZ_Load_Hook(void* pThis, void** data)
 			}
 		};
 		*/
-		//printf("%d: %x %d %.4f\n", i, ((uint32_t*)DynArrayZ_Data)[i], ((uint32_t*)DynArrayZ_Data)[i], ((float*)DynArrayZ_Data)[i]);
+		//printf("%d: %x %d %.4f\n", i, *(uint32_t*)DynArrayZ_GetItem(pDynArray, i), *(uint32_t*)DynArrayZ_GetItem(pDynArray, i), *(float*)DynArrayZ_GetItem(pDynArray, i));
 	}
 }
 
 
 static void RenderMario()
 {
-	if (marioId < 0) return;
-
-	WALLEVERTEX* targetVertices = marioVerticesP;
-	for (uint32_t i=0; i<marioGeometry.numTrianglesUsed*3; i++)
-	{
-		targetVertices[i].x = (-marioState.position[0] + marioGeometry.position[i*3+0]) / MARIO_SCALE;
-		targetVertices[i].y = (-marioState.position[1] + marioGeometry.position[i*3+1]) / MARIO_SCALE;
-		targetVertices[i].z = (-marioState.position[2] + marioGeometry.position[i*3+2]) / MARIO_SCALE;
-		targetVertices[i].nx = marioGeometry.normal[i*3+0];
-		targetVertices[i].ny = marioGeometry.normal[i*3+1];
-		targetVertices[i].nz = marioGeometry.normal[i*3+2];
-		targetVertices[i].color = D3DCOLOR_ARGB(255, (UINT)(marioGeometry.color[i*3+0]*255), (UINT)(marioGeometry.color[i*3+1]*255), (UINT)(marioGeometry.color[i*3+2]*255));
-		targetVertices[i].u = marioGeometry.uv[i*2+0];
-		targetVertices[i].v = marioGeometry.uv[i*2+1];
-	}
-
 	D3DXMATRIX projX(projMatrix);
 	D3DXMATRIX viewX(viewMatrix), viewXX(viewMatrix);
 	D3DXMATRIX worldX(1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1);
 	D3DXMatrixInverse(&viewX, 0, &viewXX);
-	D3DXMatrixTranslation(&worldX, marioState.position[0] / MARIO_SCALE,  marioState.position[1] / MARIO_SCALE,  marioState.position[2] / MARIO_SCALE);
 
 	marioEffect->SetMatrix("gProjMat", &projX);
 	marioEffect->SetMatrix("gViewMat", &viewX);
-	marioEffect->SetMatrix("gWorldMat", &worldX);
 	marioEffect->SetTexture("gTexture", marioTextureD3D9);
-	marioEffect->SetTechnique("SingleTexture");
 
-	unsigned int numPasses = 0;
-	marioEffect->Begin(&numPasses, 0);
-
-	for(unsigned int i = 0; i < numPasses; ++i)
+	if (marioId >= 0)
 	{
-		marioEffect->BeginPass(i);
+		D3DXMatrixTranslation(&worldX, marioState.position[0] / MARIO_SCALE,  marioState.position[1] / MARIO_SCALE,  marioState.position[2] / MARIO_SCALE);
+		marioEffect->SetMatrix("gWorldMat", &worldX);
 
-		d3d9Device->SetFVF(D3DFVF_WALLEVERTEX);
-		HRESULT result = d3d9Device->DrawPrimitiveUP(D3DPT_TRIANGLELIST, marioGeometry.numTrianglesUsed, marioVerticesP, sizeof(WALLEVERTEX));
-
-		marioEffect->EndPass();
-
-		if (result != D3D_OK)
+		WALLEVERTEX* targetVertices = marioVerticesP;
+		for (uint32_t i=0; i<marioGeometry.numTrianglesUsed*3; i++)
 		{
-			printf("error rendering pass %d out of %d: %d\n", i, numPasses, result);
-			break;
+			targetVertices[i].x = (-marioState.position[0] + marioGeometry.position[i*3+0]) / MARIO_SCALE;
+			targetVertices[i].y = (-marioState.position[1] + marioGeometry.position[i*3+1]) / MARIO_SCALE;
+			targetVertices[i].z = (-marioState.position[2] + marioGeometry.position[i*3+2]) / MARIO_SCALE;
+			targetVertices[i].nx = marioGeometry.normal[i*3+0];
+			targetVertices[i].ny = marioGeometry.normal[i*3+1];
+			targetVertices[i].nz = marioGeometry.normal[i*3+2];
+			targetVertices[i].color = D3DCOLOR_ARGB(255, (UINT)(marioGeometry.color[i*3+0]*255), (UINT)(marioGeometry.color[i*3+1]*255), (UINT)(marioGeometry.color[i*3+2]*255));
+			targetVertices[i].u = marioGeometry.uv[i*2+0];
+			targetVertices[i].v = marioGeometry.uv[i*2+1];
 		}
+
+		unsigned int numPasses = 0;
+		marioEffect->SetTechnique("MarioTechnique");
+		marioEffect->Begin(&numPasses, 0);
+
+		for(unsigned int i = 0; i < numPasses; ++i)
+		{
+			marioEffect->BeginPass(i);
+
+			d3d9Device->SetFVF(D3DFVF_WALLEVERTEX);
+			HRESULT result = d3d9Device->DrawPrimitiveUP(D3DPT_TRIANGLELIST, marioGeometry.numTrianglesUsed, marioVerticesP, sizeof(WALLEVERTEX));
+
+			marioEffect->EndPass();
+
+			if (result != D3D_OK)
+			{
+				printf("error rendering pass %d out of %d: %d\n", i, numPasses, result);
+				break;
+			}
+		}
+
+		marioEffect->End();
+
+		D3DXMatrixTranslation(&worldX, -marioState.position[0] / MARIO_SCALE,  -marioState.position[1] / MARIO_SCALE,  -marioState.position[2] / MARIO_SCALE);
 	}
 
-	marioEffect->End();
+	if (debugVerticesP /*&& marioId >= 0*/)
+	{
+		D3DXMatrixScaling(&worldX, 1.f/MARIO_SCALE, 1.f/MARIO_SCALE, 1.f/MARIO_SCALE);
+		marioEffect->SetMatrix("gWorldMat", &worldX);
+
+		unsigned int numPasses = 0;
+		marioEffect->SetTechnique("DebugVertexTechnique");
+		marioEffect->Begin(&numPasses, 0);
+
+		for(unsigned int i = 0; i < numPasses; ++i)
+		{
+			marioEffect->BeginPass(i);
+
+			d3d9Device->SetFVF(D3DFVF_WALLEVERTEX);
+			HRESULT result = d3d9Device->DrawPrimitiveUP(D3DPT_TRIANGLELIST, debugVerticesSize, debugVerticesP, sizeof(WALLEVERTEX));
+
+			marioEffect->EndPass();
+
+			if (result != D3D_OK)
+			{
+				printf("error rendering pass %d out of %d: %d\n", i, numPasses, result);
+				break;
+			}
+		}
+
+		marioEffect->End();
+	}
 }
 
 
@@ -802,8 +1136,16 @@ void modMain()
 
 	//RegisterCmdOrig                            = safetyhook::create_inline((void*)RegisterCmd, (void*)&RegisterCmdHook);
 	RunCmdOrig                                 = safetyhook::create_inline((void*)RunCmd, (void*)&RunCmdHook);
+	ClassManagerZ_RegisterClass_Orig           = safetyhook::create_inline((void*)ClassManagerZ_RegisterClass, (void*)&ClassManagerZ_RegisterClass_Hook);
+	ClassManagerZ_GetClassName_Orig            = safetyhook::create_inline((void*)ClassManagerZ_GetClassName, (void*)&ClassManagerZ_GetClassName_Hook);
+	NameZ_GetID_Orig                           = safetyhook::create_inline((void*)NameZ_GetID, (void*)&NameZ_GetID_Hook);
 	ScriptManagerG_GetMainPlayer_Orig          = safetyhook::create_inline((void*)ScriptManagerG_GetMainPlayer, (void*)&ScriptManagerG_GetMainPlayer_Hook);
 	HandleManagerZ_GetPtr_Orig                 = safetyhook::create_inline((void*)HandleManagerZ_GetPtr, (void*)&HandleManagerZ_GetPtr_Hook);
+	MeshPcZ_Unk_597c30_Orig                    = safetyhook::create_inline((void*)MeshPcZ_Unk_597c30, (void*)&MeshPcZ_Unk_597c30_Hook);
+	MeshPcZ_Draw_Orig                          = safetyhook::create_inline((void*)MeshPcZ_Draw, (void*)&MeshPcZ_Draw_Hook);
+	SurfacePcZ_Draw_Orig                       = safetyhook::create_inline((void*)SurfacePcZ_Draw, (void*)&SurfacePcZ_Draw_Hook);
+	//SurfaceZ_GetCollisionPtr_Orig              = safetyhook::create_inline((void*)SurfaceZ_GetCollisionPtr, (void*)&SurfaceZ_GetCollisionPtr_Hook);
+	NodeZ_AfterEndLoad_Orig                    = safetyhook::create_inline((void*)NodeZ_AfterEndLoad, (void*)&NodeZ_AfterEndLoad_Hook);
 	LodMoveZ_GetPos_Orig                       = safetyhook::create_inline((void*)LodMoveZ_GetPos, (void*)&LodMoveZ_GetPos_Hook);
 	ObjectMoveZ_GetScale_Orig                  = safetyhook::create_inline((void*)ObjectMoveZ_GetScale, (void*)&ObjectMoveZ_GetScale_Hook);
 	ObjectMoveZ_GetRot_Orig                    = safetyhook::create_inline((void*)ObjectMoveZ_GetRot, (void*)&ObjectMoveZ_GetRot_Hook);

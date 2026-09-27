@@ -124,6 +124,25 @@ technique MarioTechnique
 		VertexShader = compile vs_2_0 TexturedVertexShader();
 		PixelShader = compile ps_2_0 TexturedPixelShader();
 	}
-})=====";
+}
+
+technique DebugVertexTechnique
+{
+	// untextured
+	pass First
+	{
+		Lighting = TRUE; // Turn off lights
+		ZEnable = TRUE; // Turn on the Z-buffer
+		ZWriteEnable = TRUE; // Turn on the Z-buffer
+		AlphaBlendEnable = TRUE; // Turn on alpha blending
+		SrcBlend = SRCALPHA; // Set SrcBlend flag for standard alpha blending
+		DestBlend = INVSRCALPHA; // Set DestBlend flag for standard alpha blending
+		CullMode = NONE;
+
+		VertexShader = compile vs_2_0 UntexturedVertexShader();
+		PixelShader = compile ps_2_0 UntexturedPixelShader();
+	}
+}
+)=====";
 
 #endif // MARIOEFFECT_H_INCLUDED

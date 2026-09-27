@@ -87,7 +87,10 @@
 		<Unit filename="src/mod.h" />
 		<Unit filename="src/quatmath.cpp" />
 		<Unit filename="src/quatmath.h" />
+		<Unit filename="src/zouna/globals.cpp" />
 		<Unit filename="src/zouna/globals.h" />
+		<Unit filename="src/zouna/utils.cpp" />
+		<Unit filename="src/zouna/utils.h" />
 		<Unit filename="third_party/TinySHA1.hpp" />
 		<Unit filename="third_party/libsm64/debug_print.c">
 			<Option compilerVar="CC" />

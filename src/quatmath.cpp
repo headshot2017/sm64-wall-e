@@ -56,3 +56,17 @@ void ToEuler(float* in, float* out)
 	for (int i=0; i<3; i++)
 		while (out[i] < 0) out[i] += M_PI;
 }
+
+Vec3f GetAxisAngle(float* radians, Quat* q)
+{
+	float length = sqrtf( q->v.x * q->v.x + q->v.y * q->v.y + q->v.z * q->v.z );
+	*radians = 2.0f * atan2f( length, q->w );
+	if ( length > 0.0f )
+	{
+		float invLength = 1.0f / length;
+		Vec3f axis = { invLength * q->v.x, invLength * q->v.y, invLength * q->v.z };
+		return axis;
+	}
+
+	return (Vec3f){0,0,0};
+}
