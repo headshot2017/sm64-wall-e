@@ -89,7 +89,7 @@ static s32 surface_has_force(s16 surfaceType) {
     return hasForce;
 }
 
-static void engine_surface_from_lib_surface( struct SM64SurfaceCollisionData *surface, const struct SM64Surface *libSurf, struct SM64SurfaceObjectTransform *transform )
+static void engine_surface_from_lib_surface( struct SM64SurfaceCollisionData *surface, struct SM64Surface *libSurf, struct SM64SurfaceObjectTransform *transform )
 {
     int16_t type = libSurf->type;
     int16_t force = libSurf->force;
@@ -206,6 +206,17 @@ static void engine_surface_from_lib_surface( struct SM64SurfaceCollisionData *su
     }
 
     surface->isValid = 1;
+
+    // Output new vertices to original
+    libSurf->vertices[0][0] = x1;
+    libSurf->vertices[0][1] = y1;
+    libSurf->vertices[0][2] = z1;
+    libSurf->vertices[1][0] = x2;
+    libSurf->vertices[1][1] = y2;
+    libSurf->vertices[1][2] = z2;
+    libSurf->vertices[2][0] = x3;
+    libSurf->vertices[2][1] = y3;
+    libSurf->vertices[2][2] = z3;
 }
 
 uint32_t loaded_surface_iter_group_count( void )
@@ -229,7 +240,7 @@ struct SM64SurfaceCollisionData *loaded_surface_iter_get_at_index( uint32_t grou
     return &s_surface_object_list[ groupIndex - 1 ].engineSurfaces[ surfaceIndex ];
 }
 
-void surfaces_load_static( const struct SM64Surface *surfaceArray, uint32_t numSurfaces )
+void surfaces_load_static( struct SM64Surface *surfaceArray, uint32_t numSurfaces )
 {
     if( s_static_surface_list != NULL )
         free( s_static_surface_list );
@@ -237,8 +248,13 @@ void surfaces_load_static( const struct SM64Surface *surfaceArray, uint32_t numS
     s_static_surface_count = numSurfaces;
     s_static_surface_list = malloc( sizeof( struct SM64SurfaceCollisionData ) * numSurfaces );
 
+    struct SM64SurfaceObjectTransform transform;
+
     for( int i = 0; i < numSurfaces; ++i )
-        engine_surface_from_lib_surface( &s_static_surface_list[i], &surfaceArray[i], NULL );
+    {
+        init_transform(&transform, &surfaceArray[i].transform);
+        engine_surface_from_lib_surface( &s_static_surface_list[i], &surfaceArray[i], &transform );
+    }
 }
 
 uint32_t surfaces_load_object( const struct SM64SurfaceObject *surfaceObject )

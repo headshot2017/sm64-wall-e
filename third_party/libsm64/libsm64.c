@@ -164,7 +164,7 @@ SM64_LIB_FN uint32_t sm64_audio_tick( uint32_t numQueuedSamples, uint32_t numDes
     return num_audio_samples;
 }
 
-SM64_LIB_FN void sm64_static_surfaces_load( const struct SM64Surface *surfaceArray, uint32_t numSurfaces )
+SM64_LIB_FN void sm64_static_surfaces_load( struct SM64Surface *surfaceArray, uint32_t numSurfaces )
 {
     surfaces_load_static( surfaceArray, numSurfaces );
 }
