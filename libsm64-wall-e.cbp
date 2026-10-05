@@ -85,8 +85,6 @@
 		<Unit filename="src/marioEffect.h" />
 		<Unit filename="src/mod.cpp" />
 		<Unit filename="src/mod.h" />
-		<Unit filename="src/quatmath.cpp" />
-		<Unit filename="src/quatmath.h" />
 		<Unit filename="src/zouna/globals.cpp" />
 		<Unit filename="src/zouna/globals.h" />
 		<Unit filename="src/zouna/utils.cpp" />

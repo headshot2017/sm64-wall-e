@@ -52,6 +52,10 @@ struct Quat {
     float w;
 };
 
+struct Mat3x3 {
+    float m[3][4];
+};
+
 struct Mat4x4 {
     float m[4][4];
 
@@ -105,12 +109,48 @@ struct Mat4x4 {
 			}
 		}
 	}
+
+	void Inverse(Mat4x4& Out) const {
+		float Det = 0.f;
+		Det += m[0][0] * m[1][1] * m[2][2];
+		Det += m[1][0] * m[2][1] * m[0][2];
+		Det += m[2][0] * m[0][1] * m[1][2];
+		Det -= m[2][0] * m[1][1] * m[0][2];
+		Det -= m[1][0] * m[0][1] * m[2][2];
+		Det -= m[0][0] * m[2][1] * m[1][2];
+
+		float Det1 = 1.f / Det;
+
+		Out.m[0][0] = (m[1][1] * m[2][2] - m[2][1] * m[1][2]) * Det1;
+		Out.m[0][1] = -(m[0][1] * m[2][2] - m[2][1] * m[0][2]) * Det1;
+		Out.m[0][2] = (m[0][1] * m[1][2] - m[1][1] * m[0][2]) * Det1;
+		Out.m[1][0] = -(m[1][0] * m[2][2] - m[2][0] * m[1][2]) * Det1;
+		Out.m[1][1] = (m[0][0] * m[2][2] - m[2][0] * m[0][2]) * Det1;
+		Out.m[1][2] = -(m[0][0] * m[1][2] - m[1][0] * m[0][2]) * Det1;
+		Out.m[2][0] = (m[1][0] * m[2][1] - m[2][0] * m[1][1]) * Det1;
+		Out.m[2][1] = -(m[0][0] * m[2][1] - m[2][0] * m[0][1]) * Det1;
+		Out.m[2][2] = (m[0][0] * m[1][1] - m[1][0] * m[0][1]) * Det1;
+
+		Out.m[3][0] = -(Out.m[0][0] * m[3][0] + Out.m[1][0] * m[3][1] + Out.m[2][0] * m[3][2]);
+		Out.m[3][1] = -(Out.m[0][1] * m[3][0] + Out.m[1][1] * m[3][1] + Out.m[2][1] * m[3][2]);
+		Out.m[3][2] = -(Out.m[0][2] * m[3][0] + Out.m[1][2] * m[3][1] + Out.m[2][2] * m[3][2]);
+
+		Out.m[0][3] = 0.f;
+		Out.m[1][3] = 0.f;
+		Out.m[2][3] = 0.f;
+		Out.m[3][3] = 1.f;
+	}
 };
 
 struct QuadCtrlPoint_Z
 {
     Vec4f m_ControlPoints[4][4];
 };
+
+void ToQuat(float* in, float* out);
+void ToEuler(float* in, float* out);
+void Mat3x3ToEuler(Mat3x3* in, Vec3f* out);
+Vec3f GetAxisAngle(float* radians, Quat* q);
 
 void* BaseObjectZ_GetHandle(void* pBaseObject);
 uint32_t DynArrayZ_GetSize(void* pDynArray);

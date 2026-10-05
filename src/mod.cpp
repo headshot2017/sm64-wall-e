@@ -19,7 +19,6 @@ extern "C" {
 #include "audio.h"
 #include "config.h"
 #include "marioEffect.h"
-#include "quatmath.h"
 #include "zouna/utils.h"
 #include "zouna/globals.h"
 
@@ -31,6 +30,17 @@ struct WALLEVERTEX
 	float nx, ny, nz; // normal
 	D3DCOLOR color;
 	float  u,  v;     // texture
+};
+
+struct SM64ZounaSurface
+{
+	void* pNode;
+	uint32_t offset;
+	uint32_t size;
+	Vec3f pos;
+	Vec3f rot;
+	WALLEVERTEX* pDebugVertices;
+	bool visible;
 };
 
 void Message(const char* sometext)
@@ -47,13 +57,14 @@ static SM64MarioGeometryBuffers marioGeometry = {0};
 LPDIRECT3DDEVICE9 d3d9Device = 0;
 LPDIRECT3DTEXTURE9 marioTextureD3D9 = 0;
 WALLEVERTEX* marioVerticesP = 0;
-WALLEVERTEX* debugVerticesP = 0;
-static uint32_t debugVerticesSize = 0;
 LPD3DXEFFECT marioEffect = 0;
+bool worldLoaded = false;
 float projMatrix[16] = {0};
 float viewMatrix[16] = {0};
+static int windowSize[2] = {0};
 static void RenderMario();
 static std::vector<SM64Surface> marioStaticSurfaces;
+static std::vector<SM64ZounaSurface> marioZounaSurfaces;
 
 
 auto RegisterCmd = 0x4763b0;
@@ -75,6 +86,7 @@ auto LodMoveZ_SetPos = 0x4354b0;
 auto LodMoveZ_SetPosAndRot = 0x435680;
 auto CreaturesMoveG_SetMyFuturePos = 0x5eef10;
 auto GameZ_Update = 0x438620;
+auto WorldZ_Load = 0x4bd280;
 auto WorldZ_LoadDone = 0x4bd760;
 auto CreaturesG_Init = 0x6970a0;
 auto CreaturesG_Sleep = 0x5ebb90;
@@ -99,7 +111,6 @@ auto RendererZ_DrawString = 0x5cb8e0;
 auto D3D_RendererZ_PushProjMatrix = 0x5aed70;
 auto D3D_RendererZ_PushViewMatrix = 0x5aee00;
 auto ClearZBuffer = 0x58ffb0;
-auto SurfaceZ_Load = 0x4d3450;
 SafetyHookInline RegisterCmdOrig;
 SafetyHookInline RunCmdOrig;
 SafetyHookInline ClassManagerZ_RegisterClass_Orig;
@@ -119,6 +130,7 @@ SafetyHookInline LodMoveZ_SetPos_Orig;
 SafetyHookInline LodMoveZ_SetPosAndRot_Orig;
 SafetyHookInline CreaturesMoveG_SetMyFuturePos_Orig;
 SafetyHookInline GameZ_Update_Orig;
+SafetyHookInline WorldZ_Load_Orig;
 SafetyHookInline WorldZ_LoadDone_Orig;
 SafetyHookInline CreaturesG_Init_Orig;
 SafetyHookInline CreaturesG_Sleep_Orig;
@@ -144,7 +156,6 @@ SafetyHookInline D3D_RendererZ_PushProjMatrix_Orig;
 SafetyHookInline D3D_RendererZ_PushViewMatrix_Orig;
 SafetyHookInline ClearZBuffer_Orig;
 SafetyHookInline D3D_Clear_Orig;
-SafetyHookInline SurfaceZ_Load_Orig;
 safetyhook::MidHook D3D_RendererZ_PushProjMatrix_MidOrig;
 safetyhook::MidHook D3D_RendererZ_PushViewMatrix_MidOrig;
 SAFETYHOOK_STDCALL HRESULT D3D_Clear_Hook(LPDIRECT3DDEVICE9, DWORD, const D3DRECT*, DWORD, D3DCOLOR, float, DWORD);
@@ -251,25 +262,49 @@ SAFETYHOOK_THISCALL void NodeZ_AfterEndLoad_Hook(void* pThis)
 		{
 			uint32_t nodeFlag = *(uint32_t *)(pThis + 0xd8);
 			printf("nodeFlag = %x\n", nodeFlag);
-			if (nodeFlag & (1 << 16) || nodeFlag & (1 << 7) /*|| nodeFlag & (1 << 8)*/ || nodeFlag == (1 << 27))
+			if (nodeFlag & (1 << 16) || nodeFlag & (1 << 18) || nodeFlag & (1 << 25) ||/*nodeFlag & (1 << 7)*/ /*|| nodeFlag & (1 << 8) || */nodeFlag == (1 << 27))
 			{
 				printf("skip this node...\n");
 				return;
 			}
 
 			//uint32_t PatchTabSize = DynArrayZ_GetSize(pObjectZ + 0xa0);
-			Vec3f worldPos = *(*(Vec3f **)(pThis + 0x78) + 0x30);
+			Vec3f worldPos = *(Vec3f *)(*(void **)(pThis + 0x78) + 0x30);
 			Vec3f pos = *(Vec3f *)(pThis + 0xcc);
 			float scale = *(float *)(pThis + 0xec);
-			//float* quat = (float *)(pThis + 0xdc);
-			Quat* quat = (Quat *)(pThis + 0xbc);
+			Quat* quat = (Quat *)(pThis + 0xdc); // m_RotInWorld
+			Mat3x3* rotMat = (Mat3x3*)(pThis + 0x5c);
+			//Quat* quat = (Quat *)(pThis + 0xbc); // m_Rotation
+			/*
 			float angle;
 			Vec3f axis = GetAxisAngle(&angle, quat);
-			axis.x *= 0;
-			axis.y *= 0;
-			axis.z *= 0;
-			//ToEuler(quat, (float*)&angle);
-			printf("Surface_Z, pos=%.3f %.3f %.3f scale=%.3f angle=%.3f %.3f %.3f\n", pos.x, pos.y, pos.z, scale, axis.x, axis.y, axis.z);
+			angle = angle * 180 / D3DX_PI;
+			axis.x *= angle;
+			axis.y *= angle;
+			axis.z *= angle;
+			*/
+			/*
+			Vec3f axis = {0};
+			ToEuler((float*)&quat, (float*)&axis);
+			axis.x = axis.x * 180 / D3DX_PI;
+			axis.y = axis.y * 180 / D3DX_PI;
+			axis.z = axis.z * 180 / D3DX_PI;
+			*/
+			Vec3f axis = {0};
+			Mat3x3ToEuler(rotMat, &axis);
+			axis.x = axis.x * 180 / D3DX_PI;
+			axis.y = axis.y * 180 / D3DX_PI;
+			axis.z = axis.z * 180 / D3DX_PI;
+			if (fabsf(axis.x) > 179 && fabsf(axis.z) > 179)
+				axis.y *= -1;
+
+			printf("Surface_Z, worldPos=%.3f %.3f %.3f (%x) pos=%.3f %.3f %.3f scale=%.3f angle=%.3f %.3f %.3f\n",
+					worldPos.x, worldPos.y, worldPos.z,
+					(Vec3f *)(*(void **)(pThis + 0x78) + 0x30),
+					pos.x, pos.y, pos.z,
+					scale,
+					axis.x, axis.y, axis.z);
+			printf("worldPos addr=%x pos addr=%x quat addr=%x %x\n", (*(void **)(pThis + 0x78) + 0x30), pThis+0xcc, quat, pThis+0xdc);
 
 			worldPos.x *= MARIO_SCALE;
 			worldPos.y *= MARIO_SCALE;
@@ -282,29 +317,50 @@ SAFETYHOOK_THISCALL void NodeZ_AfterEndLoad_Hook(void* pThis)
 			printf("going through parents...\n");
 			while (pParent)
 			{
+				uint32_t parentFlag = *(uint32_t *)(pParent + 0xd8);
 				Vec3f parentWorldPos = *(*(Vec3f **)(pParent + 0x78) + 0x30);
 				Vec3f parentPos = *(Vec3f *)(pParent + 0xcc);
 				float parentScale = *(float *)(pParent + 0xec);
-				//quat = (float *)(pParent + 0xdc);
-				quat = (Quat *)(pParent + 0xbc);
+				//quat = (Quat *)(pParent + 0xdc);
+				//quat = (Quat *)(pParent + 0xbc);
 
-				//worldPos.x += parentWorldPos.x * MARIO_SCALE;
-				//worldPos.y += parentWorldPos.y * MARIO_SCALE;
-				//worldPos.z += parentWorldPos.z * MARIO_SCALE;
-				//pos.x += parentPos.x * MARIO_SCALE;
-				//pos.y += parentPos.y * MARIO_SCALE;
-				//pos.z += parentPos.z * MARIO_SCALE;
+				pos.x += parentPos.x * MARIO_SCALE;
+				pos.y += parentPos.y * MARIO_SCALE;
+				pos.z += parentPos.z * MARIO_SCALE;
+				/*
 				Vec3f parentAxis = GetAxisAngle(&angle, quat);
-				//axis.x += parentAxis.x * angle;
-				//axis.y += parentAxis.y * angle;
-				//axis.z += parentAxis.z * angle;
+				angle = angle * 180 / D3DX_PI;
+				axis.x += parentAxis.x * angle;
+				axis.y += parentAxis.y * angle;
+				axis.z += parentAxis.z * angle;
+				*/
+				/*
+				Vec3f parentAngle = {0};
+				ToEuler((float*)&quat, (float*)&parentAngle);
+				angle.x += parentAngle.x;
+				angle.y += parentAngle.y;
+				angle.z += parentAngle.z;
+				*/
 				scale *= parentScale;
-				printf("parent %x, next parent %x, parentPos=%.3f %.3f %.3f scale=%.3f parentAngle=%.3f %.3f %.3f\n", pParent, *(void**)(pParent + 0x138), parentPos.x, parentPos.y, parentPos.z, scale, parentAxis.x*angle, parentAxis.y*angle, parentAxis.z*angle);
+				//printf("parent %x, next parent %x, nodeFlag=%x, parentWorldPos=%.3f %.3f %.3f, parentPos=%.3f %.3f %.3f scale=%.3f parentAngle=%.3f %.3f %.3f\n", pParent, *(void**)(pParent + 0x138), parentFlag, parentWorldPos.x, parentWorldPos.y, parentWorldPos.z, parentPos.x, parentPos.y, parentPos.z, scale, parentAxis.x*angle, parentAxis.y*angle, parentAxis.z*angle);
 				pParent = *(void**)(pParent + 0x138);
 				//pParent = 0;
 			}
 
-			GetSurfaceVertices(pObjectZ, pos, axis, marioStaticSurfaces);
+			std::vector<SM64Surface> tempSurfaces;
+			GetSurfaceVertices(pObjectZ, worldPos, axis, tempSurfaces);
+
+			SM64ZounaSurface zounaSurf;
+			zounaSurf.pNode = pThis;
+			zounaSurf.offset = marioStaticSurfaces.size();
+			zounaSurf.size = tempSurfaces.size();
+			zounaSurf.pos = worldPos;
+			zounaSurf.rot = axis;
+			zounaSurf.pDebugVertices = new WALLEVERTEX[zounaSurf.size*3];
+			zounaSurf.visible = true;
+
+			marioStaticSurfaces.insert(marioStaticSurfaces.end(), tempSurfaces.begin(), tempSurfaces.end());
+			marioZounaSurfaces.push_back(zounaSurf);
 		}
 		else if (objectType == 6)
 		{
@@ -421,68 +477,85 @@ SAFETYHOOK_THISCALL void CreaturesMoveG_SetMyFuturePos_Hook(void* pThis, float* 
 	CreaturesMoveG_SetMyFuturePos_Orig.thiscall<void>(pThis, pos, param_3);
 }
 
+SAFETYHOOK_THISCALL void WorldZ_Load_Hook(void* pThis, void* pData)
+{
+	printf("World_Z::Load(): %x %x\n", pThis, pData);
+	WorldZ_Load_Orig.thiscall<void>(pThis, pData);
+	worldLoaded = false;
+
+	for (SM64ZounaSurface& surf : marioZounaSurfaces)
+	{
+		delete[] surf.pDebugVertices;
+	}
+
+	marioZounaSurfaces.clear();
+}
+
 SAFETYHOOK_THISCALL void WorldZ_LoadDone_Hook(void* pThis)
 {
 	printf("World_Z::LoadDone(): %x (%d total surfaces)\n", pThis, marioStaticSurfaces.size());
+	WorldZ_LoadDone_Orig.thiscall<void>(pThis);
+	worldLoaded = true;
 
+	/*
 	if (debugVerticesP)
 	{
 		delete[] debugVerticesP;
 		debugVerticesP = 0;
-		debugVerticesSize = 0;
+		debugTrianglesSize = 0;
 	}
+	*/
 
 	if (!marioStaticSurfaces.empty())
 	{
 		sm64_static_surfaces_load(marioStaticSurfaces.data(), marioStaticSurfaces.size());
 
-		debugVerticesSize = marioStaticSurfaces.size();
-		debugVerticesP = new WALLEVERTEX[debugVerticesSize*3];
-		for (uint32_t i=0; i<marioStaticSurfaces.size(); i++)
+		for (SM64ZounaSurface& zounaSurf : marioZounaSurfaces)
 		{
-			SM64Surface& surf = marioStaticSurfaces[i];
+			for (uint32_t i=0; i<zounaSurf.size; i++)
+			{
+				SM64Surface& surf = marioStaticSurfaces[zounaSurf.offset+i];
 
-			float x1 = debugVerticesP[i*3+0].x = surf.vertices[0][0];
-			float y1 = debugVerticesP[i*3+0].y = surf.vertices[0][1];
-			float z1 = debugVerticesP[i*3+0].z = surf.vertices[0][2];
-			float x2 = debugVerticesP[i*3+1].x = surf.vertices[1][0];
-			float y2 = debugVerticesP[i*3+1].y = surf.vertices[1][1];
-			float z2 = debugVerticesP[i*3+1].z = surf.vertices[1][2];
-			float x3 = debugVerticesP[i*3+2].x = surf.vertices[2][0];
-			float y3 = debugVerticesP[i*3+2].y = surf.vertices[2][1];
-			float z3 = debugVerticesP[i*3+2].z = surf.vertices[2][2];
+				float x1 = zounaSurf.pDebugVertices[i*3+0].x = surf.vertices[0][0];
+				float y1 = zounaSurf.pDebugVertices[i*3+0].y = surf.vertices[0][1];
+				float z1 = zounaSurf.pDebugVertices[i*3+0].z = surf.vertices[0][2];
+				float x2 = zounaSurf.pDebugVertices[i*3+1].x = surf.vertices[1][0];
+				float y2 = zounaSurf.pDebugVertices[i*3+1].y = surf.vertices[1][1];
+				float z2 = zounaSurf.pDebugVertices[i*3+1].z = surf.vertices[1][2];
+				float x3 = zounaSurf.pDebugVertices[i*3+2].x = surf.vertices[2][0];
+				float y3 = zounaSurf.pDebugVertices[i*3+2].y = surf.vertices[2][1];
+				float z3 = zounaSurf.pDebugVertices[i*3+2].z = surf.vertices[2][2];
 
-			float nx = (y2 - y1) * (z3 - z2) - (z2 - z1) * (y3 - y2);
-			float ny = (z2 - z1) * (x3 - x2) - (x2 - x1) * (z3 - z2);
-			float nz = (x2 - x1) * (y3 - y2) - (y2 - y1) * (x3 - x2);
-			float mag = sqrtf(nx * nx + ny * ny + nz * nz);
-			nx /= mag;
-			ny /= mag;
-			nz /= mag;
+				float nx = (y2 - y1) * (z3 - z2) - (z2 - z1) * (y3 - y2);
+				float ny = (z2 - z1) * (x3 - x2) - (x2 - x1) * (z3 - z2);
+				float nz = (x2 - x1) * (y3 - y2) - (y2 - y1) * (x3 - x2);
+				float mag = sqrtf(nx * nx + ny * ny + nz * nz);
+				nx /= mag;
+				ny /= mag;
+				nz /= mag;
 
-			debugVerticesP[i*3+0].nx = nx;
-			debugVerticesP[i*3+0].ny = ny;
-			debugVerticesP[i*3+0].nz = nz;
-			debugVerticesP[i*3+1].nx = nx;
-			debugVerticesP[i*3+1].ny = ny;
-			debugVerticesP[i*3+1].nz = nz;
-			debugVerticesP[i*3+2].nx = nx;
-			debugVerticesP[i*3+2].ny = ny;
-			debugVerticesP[i*3+2].nz = nz;
+				zounaSurf.pDebugVertices[i*3+0].nx = nx;
+				zounaSurf.pDebugVertices[i*3+0].ny = ny;
+				zounaSurf.pDebugVertices[i*3+0].nz = nz;
+				zounaSurf.pDebugVertices[i*3+1].nx = nx;
+				zounaSurf.pDebugVertices[i*3+1].ny = ny;
+				zounaSurf.pDebugVertices[i*3+1].nz = nz;
+				zounaSurf.pDebugVertices[i*3+2].nx = nx;
+				zounaSurf.pDebugVertices[i*3+2].ny = ny;
+				zounaSurf.pDebugVertices[i*3+2].nz = nz;
 
-			for (int j=0; j<3; j++)
-				debugVerticesP[i*3+j].color = D3DCOLOR_ARGB(
-					128,
-					(UINT)(0.75f * (.5f+.5f*debugVerticesP[i*3+j].nx) * 255),
-					(UINT)(0.75f * (.5f+.5f*debugVerticesP[i*3+j].ny) * 255),
-					(UINT)(0.75f * (.5f+.5f*debugVerticesP[i*3+j].nz) * 255)
-				);
+				for (int j=0; j<3; j++)
+					zounaSurf.pDebugVertices[i*3+j].color = D3DCOLOR_ARGB(
+						128,
+						(UINT)(0.75f * (.5f+.5f*zounaSurf.pDebugVertices[i*3+j].nx) * 255),
+						(UINT)(0.75f * (.5f+.5f*zounaSurf.pDebugVertices[i*3+j].ny) * 255),
+						(UINT)(0.75f * (.5f+.5f*zounaSurf.pDebugVertices[i*3+j].nz) * 255)
+					);
+			}
 		}
 
 		marioStaticSurfaces.clear();
 	}
-
-	WorldZ_LoadDone_Orig.thiscall<void>(pThis);
 }
 
 // 0x60aa40 PC
@@ -746,6 +819,7 @@ SAFETYHOOK_THISCALL void GameZ_Update_Hook(void* pThis, float dt)
 
 		if (pPlayerMove)
 		{
+			/*
 			//float* quat = ObjectMoveZ_GetRot_Orig.thiscall<float*>(pPlayerMove, 0);
 			//printf("%.3f %.3f %.3f %.3f\n", quat[0], quat[1], quat[2], quat[3]);
 			ToQuat(marioState.angle, quat);
@@ -753,6 +827,7 @@ SAFETYHOOK_THISCALL void GameZ_Update_Hook(void* pThis, float dt)
 			float pos[3] = {0};
 			for (int i=0; i<3; i++) pos[i] = marioState.position[i] / MARIO_SCALE;
 			PlayerMoveG_SetMyDynPosAndRot_Orig.thiscall<void>(pPlayerMove, pos, quat, true, true, true);
+			*/
 		}
 	}
 
@@ -785,6 +860,8 @@ SAFETYHOOK_THISCALL uint32_t D3D_RendererZ_Init_Hook(int* pThis, int width, int 
 {
 	printf("D3D_Renderer_Z::Init(): %x %d %d %d %d\n", pThis, width, height, param_4, param_5);
 	uint32_t result = D3D_RendererZ_Init_Orig.thiscall<uint32_t>(pThis, width, height, param_4, param_5);
+	windowSize[0] = width;
+	windowSize[1] = height;
 	d3d9Device = (LPDIRECT3DDEVICE9)(pThis[0xbac]);
 	printf("IDirect3DDevice9: %x\n", d3d9Device);
 
@@ -835,6 +912,8 @@ SAFETYHOOK_THISCALL void D3D_RendererZ_EndRender_Hook(void* pThis, float param_2
 {
 	float pos[3] = {32, 32, 0};
 	float color[3] = {1, 1, 1};
+	char buf[64] = {0};
+
 	RendererZ_DrawString_Orig.thiscall<void>(pThis, pos, "Mario info", color, 0, 1, true);
 
 
@@ -845,8 +924,6 @@ SAFETYHOOK_THISCALL void D3D_RendererZ_EndRender_Hook(void* pThis, float param_2
 	}
 	else
 	{
-		char buf[64] = {0};
-
 		pos[1] += 8;
 		sprintf(buf, "ID: %d", marioId);
 		RendererZ_DrawString_Orig.thiscall<void>(pThis, pos, buf, color, 0, 1, true);
@@ -894,6 +971,41 @@ SAFETYHOOK_THISCALL void D3D_RendererZ_EndRender_Hook(void* pThis, float param_2
 			}
 		}
 		*/
+	}
+
+	Mat4x4 proj = *(Mat4x4*)projMatrix;
+	Mat4x4 view = *(Mat4x4*)viewMatrix;
+	Mat4x4 viewInv;
+	view.Inverse(viewInv);
+
+	for (uint32_t i=0; i<marioZounaSurfaces.size(); i++)
+	{
+		SM64ZounaSurface& surf = marioZounaSurfaces[i];
+		Vec4f finalPos(
+			surf.pDebugVertices[0].x / MARIO_SCALE,
+			surf.pDebugVertices[0].y / MARIO_SCALE,
+			surf.pDebugVertices[0].z / MARIO_SCALE,
+			1
+		);
+		finalPos = viewInv * finalPos;
+		finalPos = proj * finalPos;
+		finalPos.x /= finalPos.z;
+		finalPos.y /= -finalPos.z;
+		pos[0] = floorf((finalPos.x + 1) * windowSize[0] / 2);
+		pos[1] = floorf((finalPos.y + 1) * windowSize[1] / 2);
+
+		sprintf(buf, "surface %d %s", i, surf.visible?"ON":"OFF");
+		RendererZ_DrawString_Orig.thiscall<void>(pThis, pos, buf, color, 0, 1, true);
+		pos[1] += 8;
+		sprintf(buf, "addr=%x node=%x nodeFlag=%x", &surf, surf.pNode, *(uint32_t *)(surf.pNode + 0xd8));
+		RendererZ_DrawString_Orig.thiscall<void>(pThis, pos, buf, color, 0, 1, true);
+		pos[1] += 8;
+		sprintf(buf, "pos=%.3f %.3f %.3f", surf.pos.x, surf.pos.y, surf.pos.z);
+		RendererZ_DrawString_Orig.thiscall<void>(pThis, pos, buf, color, 0, 1, true);
+		pos[1] += 8;
+		sprintf(buf, "angle=%.3f %.3f %.3f", surf.rot.x, surf.rot.y, surf.rot.z);
+		RendererZ_DrawString_Orig.thiscall<void>(pThis, pos, buf, color, 0, 1, true);
+		pos[1] += 8;
 	}
 
 	D3D_RendererZ_EndRender_Orig.thiscall<void>(pThis, param_2);
@@ -948,33 +1060,6 @@ SAFETYHOOK_STDCALL HRESULT D3D_Clear_Hook(LPDIRECT3DDEVICE9 pThis, DWORD Count, 
 {
 	if (Flags & D3DCLEAR_TARGET) callCount = 0;
 	return D3D_Clear_Orig.stdcall<HRESULT>(pThis, Count, pRects, Flags, Color, Z, Stencil);
-}
-
-SAFETYHOOK_THISCALL void SurfaceZ_Load_Hook(void* pThis, void** data)
-{
-	printf("Surface_Z::Load(): %x\n", pThis);
-	SurfaceZ_Load_Orig.thiscall<void>(pThis, data);
-
-	int offset = 0x78;
-	void* pDynArray = (pThis + offset);
-	uint32_t DynArrayZ_Size = DynArrayZ_GetSize(pDynArray);
-	//uint32_t DynArrayZ_Size = *(uint32_t *)(pThis + offset) >> 0xe;
-	//void* DynArrayZ_Data = *(void **)(pThis + offset+4);
-	//printf("Surface_Z::Load(): %x %x, chosen DynArray_Z size: %d\n", pThis, data, DynArrayZ_Size);
-	for (uint32_t i=0; i<DynArrayZ_Size; i++)
-	{
-		/*
-		SM64Surface surf = {
-			SURFACE_DEFAULT,
-			0,
-			TERRAIN_STONE,
-			{
-				//{DynArrayZ_Data[i*3+0]}
-			}
-		};
-		*/
-		//printf("%d: %x %d %.4f\n", i, *(uint32_t*)DynArrayZ_GetItem(pDynArray, i), *(uint32_t*)DynArrayZ_GetItem(pDynArray, i), *(float*)DynArrayZ_GetItem(pDynArray, i));
-	}
 }
 
 
@@ -1033,28 +1118,34 @@ static void RenderMario()
 		D3DXMatrixTranslation(&worldX, -marioState.position[0] / MARIO_SCALE,  -marioState.position[1] / MARIO_SCALE,  -marioState.position[2] / MARIO_SCALE);
 	}
 
-	if (debugVerticesP /*&& marioId >= 0*/)
+	if (worldLoaded)
 	{
 		D3DXMatrixScaling(&worldX, 1.f/MARIO_SCALE, 1.f/MARIO_SCALE, 1.f/MARIO_SCALE);
 		marioEffect->SetMatrix("gWorldMat", &worldX);
+		marioEffect->SetTechnique("DebugVertexTechnique");
 
 		unsigned int numPasses = 0;
-		marioEffect->SetTechnique("DebugVertexTechnique");
 		marioEffect->Begin(&numPasses, 0);
 
-		for(unsigned int i = 0; i < numPasses; ++i)
+		for (uint32_t i=0; i<marioZounaSurfaces.size(); i++)
 		{
-			marioEffect->BeginPass(i);
+			SM64ZounaSurface& surf = marioZounaSurfaces[i];
+			if (!surf.visible) continue;
 
-			d3d9Device->SetFVF(D3DFVF_WALLEVERTEX);
-			HRESULT result = d3d9Device->DrawPrimitiveUP(D3DPT_TRIANGLELIST, debugVerticesSize, debugVerticesP, sizeof(WALLEVERTEX));
-
-			marioEffect->EndPass();
-
-			if (result != D3D_OK)
+			for(unsigned int j = 0; j < numPasses; ++j)
 			{
-				printf("error rendering pass %d out of %d: %d\n", i, numPasses, result);
-				break;
+				marioEffect->BeginPass(j);
+
+				d3d9Device->SetFVF(D3DFVF_WALLEVERTEX);
+				HRESULT result = d3d9Device->DrawPrimitiveUP(D3DPT_TRIANGLELIST, surf.size, surf.pDebugVertices, sizeof(WALLEVERTEX));
+
+				marioEffect->EndPass();
+
+				if (result != D3D_OK)
+				{
+					printf("error rendering pass %d out of %d: %d\n", j, numPasses, result);
+					break;
+				}
 			}
 		}
 
@@ -1153,6 +1244,7 @@ void modMain()
 	LodMoveZ_SetPosAndRot_Orig                 = safetyhook::create_inline((void*)LodMoveZ_SetPosAndRot, (void*)&LodMoveZ_SetPosAndRot_Hook);
 	CreaturesMoveG_SetMyFuturePos_Orig         = safetyhook::create_inline((void*)CreaturesMoveG_SetMyFuturePos, (void*)&CreaturesMoveG_SetMyFuturePos_Hook);
 	GameZ_Update_Orig                          = safetyhook::create_inline((void*)GameZ_Update, (void*)&GameZ_Update_Hook);
+	WorldZ_Load_Orig                           = safetyhook::create_inline((void*)WorldZ_Load, (void*)&WorldZ_Load_Hook);
 	WorldZ_LoadDone_Orig                       = safetyhook::create_inline((void*)WorldZ_LoadDone, (void*)&WorldZ_LoadDone_Hook);
 	PlayerG_Init_Orig                          = safetyhook::create_inline((void*)PlayerG_Init, (void*)&PlayerG_Init_Hook);
 	PlayerG_Suspend_Orig                       = safetyhook::create_inline((void*)PlayerG_Suspend, (void*)&PlayerG_Suspend_Hook);
@@ -1175,7 +1267,6 @@ void modMain()
 	D3D_RendererZ_EndRender_Orig               = safetyhook::create_inline((void*)D3D_RendererZ_EndRender, (void*)&D3D_RendererZ_EndRender_Hook);
 	RendererZ_DrawString_Orig                  = safetyhook::create_inline((void*)RendererZ_DrawString, (void*)&RendererZ_DrawString_Hook);
 	ClearZBuffer_Orig                          = safetyhook::create_inline((void*)ClearZBuffer, &ClearZBuffer_Hook);
-	SurfaceZ_Load_Orig                         = safetyhook::create_inline((void*)SurfaceZ_Load, &SurfaceZ_Load_Hook);
 	D3D_RendererZ_PushProjMatrix_MidOrig       = safetyhook::create_mid((void*)0x5b83fd, &D3D_RendererZ_PushProjMatrix_MidHook);
 	D3D_RendererZ_PushViewMatrix_MidOrig       = safetyhook::create_mid((void*)0x596381, &D3D_RendererZ_PushViewMatrix_MidHook);
 	//D3D_RendererZ_PushProjMatrix_Orig          = safetyhook::create_inline((void*)D3D_RendererZ_PushProjMatrix, &D3D_RendererZ_PushProjMatrix_Hook);

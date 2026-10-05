@@ -1,3 +1,4 @@
+#define _USE_MATH_DEFINES
 #include <stdio.h>
 #include <math.h>
 #include <d3dx9.h>
@@ -5,6 +6,103 @@
 #include "globals.h"
 extern "C" {
     #include "libsm64/decomp/include/surface_terrains.h"
+}
+
+void ToQuat(float* in, float* out)
+{
+	float pitch = in[0];
+	float yaw = in[1];
+	float roll = in[2];
+
+	float rollOver2 = roll * 0.5f;
+	float cosRollOver2 = cosf(rollOver2);
+	float sinRollOver2 = sinf(rollOver2);
+	float pitchOver2 = pitch * 0.5f;
+	float cosPitchOver2 = cosf(pitchOver2);
+	float sinPitchOver2 = sinf(pitchOver2);
+	float yawOver2 = yaw * 0.5f;
+	float cosYawOver2 = cosf(yawOver2);
+	float sinYawOver2 = sinf(yawOver2);
+
+	out[0] = cosYawOver2 * sinPitchOver2 * cosRollOver2 + sinYawOver2 * cosPitchOver2 * sinRollOver2; // x
+	out[1] = sinYawOver2 * cosPitchOver2 * cosRollOver2 - cosYawOver2 * sinPitchOver2 * sinRollOver2; // y
+	out[2] = cosYawOver2 * cosPitchOver2 * sinRollOver2 - sinYawOver2 * sinPitchOver2 * cosRollOver2; // z
+	out[3] = cosYawOver2 * cosPitchOver2 * cosRollOver2 + sinYawOver2 * sinPitchOver2 * sinRollOver2; // w
+}
+
+void ToEuler(float* in, float* out)
+{
+	float q_x = in[0];
+	float q_y = in[1];
+	float q_z = in[2];
+	float q_w = in[3];
+    out[0] = -asinf(2 * (q_w * q_y - q_z * q_x)) + M_PI;
+    out[1] = -atan2f(2 * (q_w * q_z + q_x * q_y), 1.f - 2.f * (q_y*q_y + q_z*q_z)) + M_PI;
+    out[2] = atan2f(2 * (q_w * q_x + q_y * q_z), 1.f - 2.f * (q_x*q_x + q_y*q_y)) + M_PI;
+
+	/*
+	float sqw = in[3] * in[3];
+	float sqx = in[0] * in[0];
+	float sqy = in[1] * in[1];
+	float sqz = in[2] * in[2];
+	float unit = sqx + sqy + sqz + sqw; // if normalised is one, otherwise is correction factor
+	float test = in[0] * in[3] - in[1] * in[2];
+
+	if (test>0.4995f*unit) // singularity at north pole
+	{
+		out[1] = 2.f * atan2f(in[1], in[0]);
+		out[0] = M_PI / 2;
+		out[2] = 0;
+		return;
+	}
+	if (test<-0.4995f*unit) // singularity at south pole
+	{
+		out[1] = -2.f * atan2f(in[1], in[0]);
+		out[0] = -M_PI / 2;
+		out[2] = 0;
+		return;
+	}
+
+	out[0] = asinf(2.f * (in[3] * in[0] - in[1] * in[2]));                             // Pitch
+	out[1] = atan2f(2.f * in[3] * in[1] + 2.f * in[2] * in[0], 1 - 2.f * (in[0] * in[0] + in[1] * in[1]));     // Yaw
+	out[2] = atan2f(2.f * in[3] * in[2] + 2.f * in[0] * in[1], 1 - 2.f * (in[2] * in[2] + in[0] * in[0]));      // Roll
+
+	for (int i=0; i<3; i++)
+		while (out[i] < 0) out[i] += M_PI;
+	*/
+}
+
+void Mat3x3ToEuler(Mat3x3* in, Vec3f* out)
+{
+	float sy = std::hypot(in->m[0][0], in->m[1][0]);
+    bool singular = sy < 1e-9;
+
+    if (!singular)
+    {
+        out->x = atan2f(in->m[2][1], in->m[2][2]);
+        out->y = atan2f(-in->m[2][0], sy);
+        out->z = atan2f(in->m[1][0], in->m[0][0]);
+    }
+    else
+    {
+        out->x = atan2f(-in->m[1][2], in->m[1][1]);
+        out->y = atan2f(-in->m[2][0], sy);
+        out->z = 0.f; // deterministic representative at gimbal lock
+    }
+}
+
+Vec3f GetAxisAngle(float* radians, Quat* q)
+{
+	float length = sqrtf( q->v.x * q->v.x + q->v.y * q->v.y + q->v.z * q->v.z );
+	*radians = 2.0f * atan2f( length, q->w );
+	if ( length > 0.0f )
+	{
+		float invLength = 1.0f / length;
+		Vec3f axis = { invLength * q->v.x, invLength * q->v.y, invLength * q->v.z };
+		return axis;
+	}
+
+	return (Vec3f){0,0,0};
 }
 
 void* BaseObjectZ_GetHandle(void* pBaseObject)
@@ -100,6 +198,24 @@ static inline void Vec4_Cross(Vec4f& o_Vec, Vec4f i_A, Vec4f i_B)
 static inline float Vec4_Dot(Vec4f i_A, Vec4f i_B)
 {
     return i_A.x * i_B.x + i_A.y * i_B.y + i_A.z * i_B.z;
+}
+
+static void ConcatMat4x4(const Mat4x4& a1, const Mat4x4& a2, Mat4x4& a3)
+{
+    Mat4x4 l_Result;
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+            l_Result.m[i][j] = a1.m[i][0] * a2.m[0][j] + a1.m[i][1] * a2.m[1][j] + a1.m[i][2] * a2.m[2][j] + a1.m[i][3] * a2.m[3][j];
+        }
+    }
+    a3 = l_Result;
+}
+
+Mat4x4 Mat4x4::operator*(const Mat4x4& i_Matrix) const
+{
+    Mat4x4 l_Mat;
+    ConcatMat4x4(*this, i_Matrix, l_Mat);
+    return l_Mat;
 }
 
 static void GetQuadPatchCtrlPoint(void *pThis, void *pPatch, QuadCtrlPoint_Z *param_2)
@@ -359,12 +475,6 @@ void GetSurfaceVertices(void* pThis, Vec3f rootPos, Vec3f angle, std::vector<SM6
 		Vec4f* l_Vtx1 = out + l_Lod + 1;
 		Vec4f* l_Vtx2 = l_Vtx1 + 1;
 		Vec4f* l_Vtx3 = out + 1;
-		printf("vertices for patch %d:\n", patchID);
-		printf("%.3f %.3f %.3f %.3f\n", l_Vtx0->x, l_Vtx0->y, l_Vtx0->z, l_Vtx0->w);
-		printf("%.3f %.3f %.3f %.3f\n", l_Vtx1->x, l_Vtx1->y, l_Vtx1->z, l_Vtx1->w);
-		printf("%.3f %.3f %.3f %.3f\n", l_Vtx2->x, l_Vtx2->y, l_Vtx2->z, l_Vtx2->w);
-		printf("%.3f %.3f %.3f %.3f\n", l_Vtx3->x, l_Vtx3->y, l_Vtx3->z, l_Vtx3->w);
-		printf("\n");
 
 		for (i=0; i<l_Lod; i++)
 		{
@@ -414,112 +524,5 @@ void GetSurfaceVertices(void* pThis, Vec3f rootPos, Vec3f angle, std::vector<SM6
             l_Vtx2++;
             l_Vtx3++;
 		}
-
-		/*
-		// Splitting controlPoints array into 3 arrays, one for each direction
-		float* controlPoints = (float*)(l_CtrlPoints.m_ControlPoints);
-		float xValues[NUM_CNTRL_PTS_PER_PATCH];
-		float yValues[NUM_CNTRL_PTS_PER_PATCH];
-		float zValues[NUM_CNTRL_PTS_PER_PATCH];
-		for (int vertID = 0; vertID < NUM_CNTRL_PTS_PER_PATCH; vertID++)
-		{
-			xValues[vertID] = controlPoints[0 + vertID * 4];
-			yValues[vertID] = controlPoints[1 + vertID * 4];
-			zValues[vertID] = controlPoints[2 + vertID * 4];
-		}
-
-		// Construct control net matrix for each direction
-		Mat4x4 P_x(xValues);
-		Mat4x4 P_y(yValues);
-		Mat4x4 P_z(zValues);
-
-		int iter = 0;
-		// LEVEL is the number of sub divisions
-		// Example: LEVEL = 0
-		// - (0 + 1)^2 = 1 Sqaure per control net
-		// - (0 + 2)^2 = 4 vertices for 1 square
-		// - Two triangles constructed:
-		//   - Triangle 1: Lower left vertex, lower right vertex, upper left vertex
-		//   - Triangle 2: Lower Right vertex, upper left vertex, upper right vertex
-		//   - Triangle 1 and 2 share lower right and upper left vertices
-		for (int k = 0; k < LEVEL; k++)
-		{
-			// Tri formation pattern:
-			// - Triangle 0: Lower Left Triangle
-			// - Triangle 1: Upper Right Triangle
-			// - Triangle 2: Lower Right Triangle
-			// - Triangle 3: Upper Left Triangle
-			// - Go back to step 0 and repeat
-			// Format: (u, v)
-			// Triangle 0: (k, 0) (k, 1) (k + 1, 0)
-			//		+1 +1
-			// Triangle 1: (k + 1, 1) (k, 1) (k + 1, 0)
-			//				      +0 +2 <- check if v value exceeds limit
-			// Triangle 2: (k + 1, 1) (k, 1) (k + 1, 2)
-			//		   -1  +1
-			// Triangle 3: (k, 2) (k, 1) (k + 1, 2)
-			//				 +0 +2 <- check if v value exceeds limit
-			int u_0 = k;
-			int v_0 = 0;
-			int u_1 = k;
-			int v_1 = 1;
-			int u_2 = k + 1;
-			int v_2 = 0;
-			int counter = 0;
-			// NOTE: u,v indicates indices of subdivison, they are not the vertices of a Bezier surface
-			while (v_1 <= LEVEL && v_2 <= LEVEL)
-			{
-				float x, y, z;
-				SM64Surface surf = {
-					SURFACE_DEFAULT,
-					0,
-					TERRAIN_STONE
-				};
-
-				// Vertex creation on Bezier Surface for (u,v)_0
-				formVertex(patchID, iter, u_0, v_0, P_x, P_y, P_z, &x, &y, &z);
-				iter += NUM_FLOATS_PER_VEC3;
-				surf.vertices[0][0] = (int)(rootPos.x + x * MARIO_SCALE);
-				surf.vertices[0][1] = (int)(rootPos.y + y * MARIO_SCALE);
-				surf.vertices[0][2] = (int)(rootPos.z + z * MARIO_SCALE);
-				// Vertex creation on Bezier Surface for (u,v)_1
-				formVertex(patchID, iter, u_1, v_1, P_x, P_y, P_z, &x, &y, &z);
-				iter += NUM_FLOATS_PER_VEC3;
-				surf.vertices[1][0] = (int)(rootPos.x + x * MARIO_SCALE);
-				surf.vertices[1][1] = (int)(rootPos.y + y * MARIO_SCALE);
-				surf.vertices[1][2] = (int)(rootPos.z + z * MARIO_SCALE);
-				// Vertex creation on Bezier Surface for (u,v)_2
-				formVertex(patchID, iter, u_2, v_2, P_x, P_y, P_z, &x, &y, &z);
-				iter += NUM_FLOATS_PER_VEC3;
-				surf.vertices[2][0] = (int)(rootPos.x + x * MARIO_SCALE);
-				surf.vertices[2][1] = (int)(rootPos.y + y * MARIO_SCALE);
-				surf.vertices[2][2] = (int)(rootPos.z + z * MARIO_SCALE);
-
-				outSurfaces.push_back(surf);
-
-				// After forming three vertices for triangle,
-				// update (u,v) points to construct next triangle
-				if (counter % 4 == 0)
-				{
-					u_0 += 1;
-					v_0 += 1;
-				}
-				if (counter % 4 == 1)
-				{
-					v_2 += 2;
-				}
-				if (counter % 4 == 2)
-				{
-					u_0 -= 1;
-					v_0 += 1;
-				}
-				if (counter % 4 == 3)
-				{
-					v_1 += 2;
-				}
-				counter++;
-			}
-		}
-		*/
 	}
 }
