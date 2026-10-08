@@ -161,7 +161,7 @@ safetyhook::MidHook D3D_RendererZ_PushViewMatrix_MidOrig;
 SAFETYHOOK_STDCALL HRESULT D3D_Clear_Hook(LPDIRECT3DDEVICE9, DWORD, const D3DRECT*, DWORD, D3DCOLOR, float, DWORD);
 
 void* PlayerG = 0;
-void* GameZ = 0;
+//void* GameZ = 0;
 void* CameraMoveG = 0;
 
 SAFETYHOOK_THISCALL void RegisterCmdHook(void* pThis, const char* cmd, void* param_3)
@@ -262,7 +262,7 @@ SAFETYHOOK_THISCALL void NodeZ_AfterEndLoad_Hook(void* pThis)
 		{
 			uint32_t nodeFlag = *(uint32_t *)(pThis + 0xd8);
 			printf("nodeFlag = %x\n", nodeFlag);
-			if (nodeFlag & (1 << 16) || nodeFlag & (1 << 18) || nodeFlag & (1 << 25) ||/*nodeFlag & (1 << 7)*/ /*|| nodeFlag & (1 << 8) || */nodeFlag == (1 << 27))
+			if (nodeFlag & (1 << 16) || nodeFlag & (1 << 18) || /*nodeFlag & (1 << 7)*/ /*|| nodeFlag & (1 << 8) ||*/ nodeFlag == (1 << 27))
 			{
 				printf("skip this node...\n");
 				return;
@@ -295,7 +295,7 @@ SAFETYHOOK_THISCALL void NodeZ_AfterEndLoad_Hook(void* pThis)
 			axis.x = axis.x * 180 / D3DX_PI;
 			axis.y = axis.y * 180 / D3DX_PI;
 			axis.z = axis.z * 180 / D3DX_PI;
-			if (fabsf(axis.x) > 179 && fabsf(axis.z) > 179)
+			if ((int)(axis.x) == 180 && (int)(axis.z) == 180)
 				axis.y *= -1;
 
 			printf("Surface_Z, worldPos=%.3f %.3f %.3f (%x) pos=%.3f %.3f %.3f scale=%.3f angle=%.3f %.3f %.3f\n",
@@ -489,22 +489,14 @@ SAFETYHOOK_THISCALL void WorldZ_Load_Hook(void* pThis, void* pData)
 	}
 
 	marioZounaSurfaces.clear();
+	marioStaticSurfaces.clear();
 }
 
 SAFETYHOOK_THISCALL void WorldZ_LoadDone_Hook(void* pThis)
 {
 	printf("World_Z::LoadDone(): %x (%d total surfaces)\n", pThis, marioStaticSurfaces.size());
 	WorldZ_LoadDone_Orig.thiscall<void>(pThis);
-	worldLoaded = true;
-
-	/*
-	if (debugVerticesP)
-	{
-		delete[] debugVerticesP;
-		debugVerticesP = 0;
-		debugTrianglesSize = 0;
-	}
-	*/
+	worldLoaded = BaseObjectZ_GetName(pThis) != NameZ_GetID_Hook("MENU", 0);
 
 	if (!marioStaticSurfaces.empty())
 	{
@@ -553,8 +545,6 @@ SAFETYHOOK_THISCALL void WorldZ_LoadDone_Hook(void* pThis)
 					);
 			}
 		}
-
-		marioStaticSurfaces.clear();
 	}
 }
 
@@ -772,15 +762,41 @@ SAFETYHOOK_THISCALL void MusicManagerG_SetMusicZone_Hook(void* pThis, uint32_t m
 }
 
 // 0x4198f0 PC, 0x4c6a8 Mac
-float quat[4] = {0};
+//float quat[4] = {0};
 SAFETYHOOK_THISCALL void GameZ_Update_Hook(void* pThis, float dt)
 {
 	//printf("Game_Z::Update(): %x, dt=%f\n", pThis, dt);
-	GameZ = pThis;
+	//GameZ = pThis;
 
-	void* pMainPlayer = ScriptManagerG_GetMainPlayer_Orig.thiscall<void*>(gData->ScriptMgr, 0);
+	if (worldLoaded)
+	{
+		for (uint32_t i=0; i<marioZounaSurfaces.size(); i++)
+		{
+			SM64ZounaSurface& surf = marioZounaSurfaces[i];
+			uint32_t nodeFlag = *(uint32_t *)(surf.pNode + 0xd8);
+			if (nodeFlag & (1 << 18)) // FL_NODE_HIDE
+			{
+				printf("surface %d marked as hidden, deleting...\n", i);
+				marioStaticSurfaces.erase(
+					marioStaticSurfaces.begin() + surf.offset,
+					marioStaticSurfaces.begin() + surf.offset + surf.size
+				);
+				delete[] surf.pDebugVertices;
+				marioZounaSurfaces.erase(marioZounaSurfaces.begin() + i);
+				for (SM64ZounaSurface& newSurf : marioZounaSurfaces)
+				{
+					if (newSurf.offset > surf.offset)
+						newSurf.offset -= surf.size;
+				}
+				sm64_static_surfaces_load(marioStaticSurfaces.data(), marioStaticSurfaces.size());
+				break;
+			}
+		}
+	}
+
 	if (marioId >= 0)
 	{
+		void* pMainPlayer = ScriptManagerG_GetMainPlayer_Orig.thiscall<void*>(gData->ScriptMgr, 0);
 		void* pPlayerMove = (pMainPlayer) ? HandleManagerZ_GetPtr_Orig.thiscall<void*>(gData->ClassMgr, pMainPlayer + 0x70) : 0; // field 0x70 is PlayerMove_G
 
 		//float* pos = LodMoveZ_GetPos_Orig.thiscall<float*>(pPlayerMove, 0);
@@ -807,6 +823,7 @@ SAFETYHOOK_THISCALL void GameZ_Update_Hook(void* pThis, float dt)
 				marioInput.stickY = -*(float *)(PInput_G + 0x288);
 				marioInput.camLookX = *(float *)(CameraZ + 0x080);
 				marioInput.camLookZ = -*(float *)(CameraZ + 0x078);
+				//printf("%d %d %d %.3f %.3f %.3f %.3f\n", marioInput.buttonA, marioInput.buttonB, marioInput.buttonZ, marioInput.stickX, marioInput.stickY, marioInput.camLookX, marioInput.camLookZ);
 				//float rStickX = *(float *)(PInput_G + 0x28c);
 				//float rStickY = *(float *)(PInput_G + 0x294);
 				//uint8_t rejectBotMusic = *(uint8_t *)(PInput_G + 0x70);
@@ -994,6 +1011,9 @@ SAFETYHOOK_THISCALL void D3D_RendererZ_EndRender_Hook(void* pThis, float param_2
 		pos[0] = floorf((finalPos.x + 1) * windowSize[0] / 2);
 		pos[1] = floorf((finalPos.y + 1) * windowSize[1] / 2);
 
+		color[0] = ((surf.pDebugVertices[0].color >> 16) & 0xff) / 255.f / 2.f;
+		color[1] = ((surf.pDebugVertices[0].color >> 8) & 0xff) / 255.f / 2.f;
+		color[2] = ((surf.pDebugVertices[0].color) & 0xff) / 255.f / 2.f;
 		sprintf(buf, "surface %d %s", i, surf.visible?"ON":"OFF");
 		RendererZ_DrawString_Orig.thiscall<void>(pThis, pos, buf, color, 0, 1, true);
 		pos[1] += 8;

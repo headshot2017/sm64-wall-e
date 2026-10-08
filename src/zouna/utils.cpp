@@ -105,6 +105,11 @@ Vec3f GetAxisAngle(float* radians, Quat* q)
 	return (Vec3f){0,0,0};
 }
 
+uint32_t BaseObjectZ_GetName(void* pBaseObject)
+{
+	return *(uint32_t*)(pBaseObject+4);
+}
+
 void* BaseObjectZ_GetHandle(void* pBaseObject)
 {
 	return pBaseObject+8;

@@ -152,6 +152,7 @@ void ToEuler(float* in, float* out);
 void Mat3x3ToEuler(Mat3x3* in, Vec3f* out);
 Vec3f GetAxisAngle(float* radians, Quat* q);
 
+uint32_t BaseObjectZ_GetName(void* pBaseObject);
 void* BaseObjectZ_GetHandle(void* pBaseObject);
 uint32_t DynArrayZ_GetSize(void* pDynArray);
 void* DynArrayZ_GetItem(void* pDynArray, uint32_t i, uint32_t stride=4);
