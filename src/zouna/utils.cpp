@@ -105,27 +105,27 @@ Vec3f GetAxisAngle(float* radians, Quat* q)
 	return (Vec3f){0,0,0};
 }
 
-uint32_t BaseObjectZ_GetName(void* pBaseObject)
+uint32_t BaseObjectZ_GetName(uint8_t* pBaseObject)
 {
 	return *(uint32_t*)(pBaseObject+4);
 }
 
-void* BaseObjectZ_GetHandle(void* pBaseObject)
+uint8_t* BaseObjectZ_GetHandle(uint8_t* pBaseObject)
 {
 	return pBaseObject+8;
 }
 
-uint32_t DynArrayZ_GetSize(void* pDynArray)
+uint32_t DynArrayZ_GetSize(uint8_t* pDynArray)
 {
 	return *(uint32_t *)(pDynArray) >> 0xe;
 }
 
-void* DynArrayZ_GetItem(void* pDynArray, uint32_t i, uint32_t stride)
+uint8_t* DynArrayZ_GetItem(uint8_t* pDynArray, uint32_t i, uint32_t stride)
 {
 	uint32_t size = DynArrayZ_GetSize(pDynArray);
 	if (i < 0 || i >= size) return 0;
 
-	void* data = *(void **)(pDynArray+4);
+	uint8_t* data = *(uint8_t **)(pDynArray+4);
 	return data + i*stride;
 }
 
@@ -223,7 +223,7 @@ Mat4x4 Mat4x4::operator*(const Mat4x4& i_Matrix) const
     return l_Mat;
 }
 
-static void GetQuadPatchCtrlPoint(void *pThis, void *pPatch, QuadCtrlPoint_Z *param_2)
+static void GetQuadPatchCtrlPoint(uint8_t* pThis, uint8_t* pPatch, QuadCtrlPoint_Z *param_2)
 {
 	float *pfVar1;
 	float fVar2;
@@ -372,7 +372,7 @@ static void GetQuadPatchCtrlPoint(void *pThis, void *pPatch, QuadCtrlPoint_Z *pa
 }
 
 
-void GetSurfaceVertices(void* pThis, Vec3f rootPos, Vec3f angle, std::vector<SM64Surface>& outSurfaces)
+void GetSurfaceVertices(uint8_t* pThis, Vec3f rootPos, Vec3f angle, std::vector<SM64Surface>& outSurfaces)
 {
 	QuadCtrlPoint_Z l_CtrlPoints;
 	//rootPos.x *= MARIO_SCALE;
@@ -386,7 +386,7 @@ void GetSurfaceVertices(void* pThis, Vec3f rootPos, Vec3f angle, std::vector<SM6
 	// Get vertices from tessellating control points
 	for (uint32_t patchID = 0; patchID < numPatches; patchID++)
 	{
-		void* pPatch = DynArrayZ_GetItem(pThis + 0xa0, patchID, 0xb0);
+		uint8_t* pPatch = DynArrayZ_GetItem(pThis + 0xa0, patchID, 0xb0);
 		GetQuadPatchCtrlPoint(pThis, pPatch, &l_CtrlPoints);
 
 		int l_Lod = 3;
