@@ -702,6 +702,14 @@ SAFETYHOOK_THISCALL uint8_t* PlayerMoveG_Destructor_Hook(uint8_t* pThis, char pa
 		marioId = -1;
 	}
 
+	for (SM64ZounaSurface& surf : marioZounaSurfaces)
+	{
+		delete[] surf.pDebugVertices;
+	}
+
+	marioZounaSurfaces.clear();
+	marioStaticSurfaces.clear();
+
 	return result;
 }
 
