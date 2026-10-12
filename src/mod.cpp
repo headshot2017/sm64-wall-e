@@ -500,6 +500,8 @@ SAFETYHOOK_THISCALL void WorldZ_LoadDone_Hook(uint8_t* pThis)
 
 	if (!marioStaticSurfaces.empty())
 	{
+		for (SM64Surface& surf : marioStaticSurfaces)
+			surf.force = 0;
 		sm64_static_surfaces_load(marioStaticSurfaces.data(), marioStaticSurfaces.size());
 
 		for (SM64ZounaSurface& zounaSurf : marioZounaSurfaces)
@@ -575,6 +577,7 @@ SAFETYHOOK_THISCALL void PlayerG_Init_Hook(uint8_t* pThis)
 	if (!pMainPlayer)
 		return;
 
+	/*
 	const char* classNames[] = {
 		"P_W_BLUE",
 		"P_W_BUTT",
@@ -605,6 +608,7 @@ SAFETYHOOK_THISCALL void PlayerG_Init_Hook(uint8_t* pThis)
 	uint8_t* pName = ClassManagerZ_GetClassName_Hook(gData->ClassMgr, pBaseObjectHdl);
 	for (int i=0; i<8; i+=4)
 		printf("%d: pBaseObjectHdl pName=%x %d, %x %d\n", i, pName+i, pName+i, *(uint32_t*)(pName+i), *(uint32_t*)(pName+i));
+	*/
 
 	uint8_t* pPlayerMove = HandleManagerZ_GetPtr_Orig.thiscall<uint8_t*>(gData->ClassMgr, pMainPlayer + 0x70); // field 0x70 is PlayerMove_G
 	if (!pPlayerMove)
@@ -659,6 +663,8 @@ SAFETYHOOK_THISCALL void PlayerG_Init_Hook(uint8_t* pThis)
 	printf("Spawned Mario %d at %.2f, %.2f, %.2f\n", marioId, x * MARIO_SCALE, y * MARIO_SCALE, z * MARIO_SCALE);
 	marioTimer = 0;
 	sm64_set_mario_faceangle(marioId, angle[2]);
+	sm64_set_mario_water_level(marioId, -1000000);
+	sm64_set_mario_gas_level(marioId, -1000000);
 
 	//CreaturesG_Sleep_Orig.thiscall<void>(pMainPlayer);
 	CreaturesG_Sleep_Orig.thiscall<void>(pThis);
@@ -761,13 +767,13 @@ SAFETYHOOK_THISCALL void MusicManagerG_SetMusicZone_Hook(uint8_t* pThis, uint32_
 	MusicManagerG_SetMusicZone_Orig.thiscall<void>(pThis, musicID, param_3);
 }
 
-// 0x4198f0 PC, 0x4c6a8 Mac
-float quat[4] = {0};
+// 0x438620 PC
 SAFETYHOOK_THISCALL void GameZ_Update_Hook(uint8_t* pThis, float dt)
 {
 	//printf("Game_Z::Update(): %x, dt=%f\n", pThis, dt);
 	//GameZ = pThis;
 
+	/*
 	if (worldLoaded)
 	{
 		for (uint32_t i=0; i<marioZounaSurfaces.size(); i++)
@@ -794,6 +800,7 @@ SAFETYHOOK_THISCALL void GameZ_Update_Hook(uint8_t* pThis, float dt)
 			}
 		}
 	}
+	*/
 
 	if (marioId >= 0)
 	{
@@ -807,30 +814,26 @@ SAFETYHOOK_THISCALL void GameZ_Update_Hook(uint8_t* pThis, float dt)
 		{
 			marioTimer -= 1.f/30.f;
 
-			if (pPlayerMove && CameraMoveG)
-			{
-				uint8_t* CamNodeBase = CameraEngineZ_GetCameraNode_Orig.thiscall<uint8_t*>(CameraMoveG);
-				uint8_t* CamNode = HandleManagerZ_GetPtr_Orig.thiscall<uint8_t*>(gData->ClassMgr, CamNodeBase);
-				uint8_t* CameraZ = (uint8_t*)(*(int *)(CamNode + 0x130));
+			uint8_t* CamNodeBase = CameraEngineZ_GetCameraNode_Orig.thiscall<uint8_t*>(CameraMoveG);
+			uint8_t* CamNode = HandleManagerZ_GetPtr_Orig.thiscall<uint8_t*>(gData->ClassMgr, CamNodeBase);
+			uint8_t* CameraZ = (uint8_t*)(*(int *)(CamNode + 0x130));
 
 
-				// from PlayerMove_G::GetPlayerInput() (0x60f530)
-				uint8_t* PInput_G = (uint8_t*)(pPlayerMove + 0xac8);
+			// from PlayerMove_G::GetPlayerInput() (0x60f530)
+			uint8_t* PInput_G = (uint8_t*)(pPlayerMove + 0xac8);
 
-				marioInput.buttonA = *(uint8_t *)(PInput_G + 0x20); // jump
-				marioInput.buttonB = *(uint8_t *)(PInput_G + 0x34); // action / attack
-				marioInput.buttonZ = *(uint8_t *)(PInput_G + 0x0c); // crouch
-				marioInput.stickX = *(float *)(PInput_G + 0x280);
-				marioInput.stickY = -*(float *)(PInput_G + 0x288);
-				marioInput.camLookX = *(float *)(CameraZ + 0x080);
-				marioInput.camLookZ = -*(float *)(CameraZ + 0x078);
-				printf("%.3f %.3f %.3f\n", marioState.angle[0], marioState.angle[1], marioState.angle[2]);
-				//float rStickX = *(float *)(PInput_G + 0x28c);
-				//float rStickY = *(float *)(PInput_G + 0x294);
-				//uint8_t rejectBotMusic = *(uint8_t *)(PInput_G + 0x70);
-				//uint8_t firstPerson = *(uint8_t *)(PInput_G + 0x5c);
-				//uint8_t laser = *(uint8_t *)(PInput_G + 0x48); // also applies to 0x84 for some reason
-			}
+			marioInput.buttonA = *(uint8_t *)(PInput_G + 0x20); // jump
+			marioInput.buttonB = *(uint8_t *)(PInput_G + 0x34); // action / attack
+			marioInput.buttonZ = *(uint8_t *)(PInput_G + 0x0c); // crouch
+			marioInput.stickX = *(float *)(PInput_G + 0x280);
+			marioInput.stickY = -*(float *)(PInput_G + 0x288);
+			marioInput.camLookX = *(float *)(CameraZ + 0x080);
+			marioInput.camLookZ = -*(float *)(CameraZ + 0x078);
+			//float rStickX = *(float *)(PInput_G + 0x28c);
+			//float rStickY = *(float *)(PInput_G + 0x294);
+			//uint8_t rejectBotMusic = *(uint8_t *)(PInput_G + 0x70);
+			//uint8_t firstPerson = *(uint8_t *)(PInput_G + 0x5c);
+			//uint8_t laser = *(uint8_t *)(PInput_G + 0x48); // also applies to 0x84 for some reason
 
 			sm64_mario_tick(marioId, &marioInput, &marioState, &marioGeometry);
 		}
@@ -839,9 +842,11 @@ SAFETYHOOK_THISCALL void GameZ_Update_Hook(uint8_t* pThis, float dt)
 		{
 			//float* quat = ObjectMoveZ_GetRot_Orig.thiscall<float*>(pPlayerMove, 0);
 			//printf("%.3f %.3f %.3f %.3f\n", quat[0], quat[1], quat[2], quat[3]);
+			float pos[3] = {0};
+			float quat[4] = {0};
+
 			ToQuat(marioState.angle, quat);
 
-			float pos[3] = {0};
 			for (int i=0; i<3; i++) pos[i] = marioState.position[i] / MARIO_SCALE;
 			PlayerMoveG_SetMyDynPosAndRot_Orig.thiscall<void>(pPlayerMove, pos, quat, true, true, true);
 		}
